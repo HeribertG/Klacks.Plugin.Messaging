@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "dgSpecHash": "F14lo+AA4GE=",
+  "success": true,
+  "projectFilePath": "C:\\SourceCode\\Klacks.Plugin.Messaging\\Klacks.Plugin.Messaging.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\hgasp\\.nuget\\packages\\microsoft.aspnetcore.authentication.jwtbearer\\10.0.5\\microsoft.aspnetcore.authentication.jwtbearer.10.0.5.nupkg.sha512",
+    "C:\\Users\\hgasp\\.nuget\\packages\\microsoft.entityframeworkcore\\10.0.5\\microsoft.entityframeworkcore.10.0.5.nupkg.sha512",
+    "C:\\Users\\hgasp\\.nuget\\packages\\microsoft.entityframeworkcore.abstractions\\10.0.5\\microsoft.entityframeworkcore.abstractions.10.0.5.nupkg.sha512",
+    "C:\\Users\\hgasp\\.nuget\\packages\\microsoft.entityframeworkcore.analyzers\\10.0.5\\microsoft.entityframeworkcore.analyzers.10.0.5.nupkg.sha512",
+    "C:\\Users\\hgasp\\.nuget\\packages\\microsoft.entityframeworkcore.relational\\10.0.4\\microsoft.entityframeworkcore.relational.10.0.4.nupkg.sha512",
+    "C:\\Users\\hgasp\\.nuget\\packages\\microsoft.identitymodel.abstractions\\8.0.1\\microsoft.identitymodel.abstractions.8.0.1.nupkg.sha512",
+    "C:\\Users\\hgasp\\.nuget\\packages\\microsoft.identitymodel.jsonwebtokens\\8.0.1\\microsoft.identitymodel.jsonwebtokens.8.0.1.nupkg.sha512",
+    "C:\\Users\\hgasp\\.nuget\\packages\\microsoft.identitymodel.logging\\8.0.1\\microsoft.identitymodel.logging.8.0.1.nupkg.sha512",
+    "C:\\Users\\hgasp\\.nuget\\packages\\microsoft.identitymodel.protocols\\8.0.1\\microsoft.identitymodel.protocols.8.0.1.nupkg.sha512",
+    "C:\\Users\\hgasp\\.nuget\\packages\\microsoft.identitymodel.protocols.openidconnect\\8.0.1\\microsoft.identitymodel.protocols.openidconnect.8.0.1.nupkg.sha512",
+    "C:\\Users\\hgasp\\.nuget\\packages\\microsoft.identitymodel.tokens\\8.0.1\\microsoft.identitymodel.tokens.8.0.1.nupkg.sha512",
+    "C:\\Users\\hgasp\\.nuget\\packages\\npgsql\\10.0.2\\npgsql.10.0.2.nupkg.sha512",
+    "C:\\Users\\hgasp\\.nuget\\packages\\npgsql.entityframeworkcore.postgresql\\10.0.1\\npgsql.entityframeworkcore.postgresql.10.0.1.nupkg.sha512",
+    "C:\\Users\\hgasp\\.nuget\\packages\\system.identitymodel.tokens.jwt\\8.0.1\\system.identitymodel.tokens.jwt.8.0.1.nupkg.sha512"
+  ],
+  "logs": []
+}

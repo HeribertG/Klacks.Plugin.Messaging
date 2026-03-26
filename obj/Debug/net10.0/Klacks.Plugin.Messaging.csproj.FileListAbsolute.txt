@@ -1,0 +1,15 @@
+C:\SourceCode\Klacks.Plugin.Messaging\obj\Debug\net10.0\Klacks.Plugin.Messaging.csproj.AssemblyReference.cache
+C:\SourceCode\Klacks.Plugin.Messaging\obj\Debug\net10.0\Klacks.Plugin.Messaging.GeneratedMSBuildEditorConfig.editorconfig
+C:\SourceCode\Klacks.Plugin.Messaging\obj\Debug\net10.0\Klacks.Plugin.Messaging.AssemblyInfoInputs.cache
+C:\SourceCode\Klacks.Plugin.Messaging\obj\Debug\net10.0\Klacks.Plugin.Messaging.AssemblyInfo.cs
+C:\SourceCode\Klacks.Plugin.Messaging\obj\Debug\net10.0\Klacks.Plugin.Messaging.csproj.CoreCompileInputs.cache
+C:\SourceCode\Klacks.Plugin.Messaging\bin\Debug\net10.0\Klacks.Plugin.Messaging.deps.json
+C:\SourceCode\Klacks.Plugin.Messaging\bin\Debug\net10.0\Klacks.Plugin.Messaging.dll
+C:\SourceCode\Klacks.Plugin.Messaging\bin\Debug\net10.0\Klacks.Plugin.Messaging.pdb
+C:\SourceCode\Klacks.Plugin.Messaging\bin\Debug\net10.0\Klacks.Plugin.Contracts.dll
+C:\SourceCode\Klacks.Plugin.Messaging\bin\Debug\net10.0\Klacks.Plugin.Contracts.pdb
+C:\SourceCode\Klacks.Plugin.Messaging\obj\Debug\net10.0\Klacks.P.511F73BB.Up2Date
+C:\SourceCode\Klacks.Plugin.Messaging\obj\Debug\net10.0\Klacks.Plugin.Messaging.dll
+C:\SourceCode\Klacks.Plugin.Messaging\obj\Debug\net10.0\refint\Klacks.Plugin.Messaging.dll
+C:\SourceCode\Klacks.Plugin.Messaging\obj\Debug\net10.0\Klacks.Plugin.Messaging.pdb
+C:\SourceCode\Klacks.Plugin.Messaging\obj\Debug\net10.0\ref\Klacks.Plugin.Messaging.dll
