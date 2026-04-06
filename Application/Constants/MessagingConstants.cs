@@ -27,4 +27,10 @@ public static class MessagingConstants
 
     public const string SettingRetentionCount = "MESSAGE_RETENTION_COUNT";
     public const string SettingWebhookBaseUrl = "MESSAGING_WEBHOOK_BASE_URL";
+
+    /// <summary>
+    /// JSONB settings key holding the owner's messenger identities.
+    /// Shape: [{ "type": int (MessengerType), "value": string, "description": string? }]
+    /// </summary>
+    public const string SettingOwnerMessengers = "APP_OWNER_MESSENGERS";
 }

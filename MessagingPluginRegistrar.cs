@@ -29,6 +29,8 @@ public class MessagingPluginRegistrar : IPluginRegistrar
     {
         services.AddScoped<IMessageRepository, MessageRepository>();
         services.AddScoped<IMessagingProviderRepository, MessagingProviderRepository>();
+        services.AddScoped<IMessengerContactRepository, MessengerContactRepository>();
+        services.AddScoped<IOwnerMessengerReader, OwnerMessengerReader>();
         services.AddScoped<IMessagingService, MessagingService>();
         services.AddScoped<MessagingProviderAdapterFactory>();
 
@@ -61,6 +63,7 @@ public class MessagingPluginRegistrar : IPluginRegistrar
     {
         modelBuilder.ApplyConfiguration(new MessageConfiguration());
         modelBuilder.ApplyConfiguration(new MessagingProviderConfiguration());
+        modelBuilder.ApplyConfiguration(new MessengerContactConfiguration());
     }
 
     public IEnumerable<Assembly> GetControllerAssemblies()

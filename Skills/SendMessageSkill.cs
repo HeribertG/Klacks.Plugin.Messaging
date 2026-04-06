@@ -2,18 +2,21 @@
 
 /// <summary>
 /// Skill for sending messages via a configured messaging provider.
-/// Resolves recipient by client name lookup when no phone number is provided.
+/// Resolves the recipient as one of: a 'mir' / 'me' alias for the Klacks owner
+/// (looked up in the APP_OWNER_MESSENGERS jsonb setting), a contact name (looked
+/// up in messenger_contact via Client name search), or a literal phone number /
+/// chat ID that is passed through unchanged.
 /// </summary>
-/// <param name="provider">The messaging provider name (e.g., "telegram", "sms-twilio")</param>
-/// <param name="recipient">Client name or phone number</param>
+/// <param name="provider">The messaging provider name or type (e.g., 'telegram', 'whatsapp')</param>
+/// <param name="recipient">'mir' / 'me' / 'myself', a Client name, or a phone number / chat ID</param>
 /// <param name="content">Message text content</param>
 /// <param name="contentType">Content type: text, image, document (default: text)</param>
 
-using Klacks.Plugin.Contracts;
 using Klacks.Plugin.Contracts.Skills;
 using Klacks.Plugin.Messaging.Application.Interfaces;
+using Klacks.Plugin.Messaging.Domain.Enums;
+using Klacks.Plugin.Messaging.Domain.Interfaces;
 using Klacks.Plugin.Messaging.Domain.Models;
-using Microsoft.EntityFrameworkCore;
 
 namespace Klacks.Plugin.Messaging.Skills;
 
@@ -25,26 +28,35 @@ public class SendMessageSkill : BaseSkillImplementation
         "mir", "ich", "me", "myself", "self"
     };
 
-    private static readonly Dictionary<string, string> ProviderToOwnerSettingKey = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly Dictionary<string, MessengerType> ProviderToMessengerType = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["telegram"] = "APP_ADDRESS_TELEGRAM",
-        ["whatsapp"] = "APP_ADDRESS_WHATSAPP",
-        ["signal"] = "APP_ADDRESS_SIGNAL",
-        ["sms"] = "APP_ADDRESS_PHONE"
+        ["telegram"] = MessengerType.Telegram,
+        ["whatsapp"] = MessengerType.WhatsApp,
+        ["signal"] = MessengerType.Signal,
+        ["sms"] = MessengerType.Sms,
+        ["threema"] = MessengerType.Threema,
+        ["viber"] = MessengerType.Viber,
+        ["line"] = MessengerType.Line,
+        ["kakaotalk"] = MessengerType.KakaoTalk,
+        ["wechat"] = MessengerType.WeChat,
+        ["zalo"] = MessengerType.Zalo,
+        ["microsoftteams"] = MessengerType.MicrosoftTeams,
+        ["teams"] = MessengerType.MicrosoftTeams,
+        ["slack"] = MessengerType.Slack
     };
 
     private readonly IMessagingService _messagingService;
-    private readonly DbContext _dbContext;
-    private readonly IPluginSettingsReader _settingsReader;
+    private readonly IMessengerContactRepository _messengerContactRepository;
+    private readonly IOwnerMessengerReader _ownerMessengerReader;
 
     public SendMessageSkill(
         IMessagingService messagingService,
-        DbContext dbContext,
-        IPluginSettingsReader settingsReader)
+        IMessengerContactRepository messengerContactRepository,
+        IOwnerMessengerReader ownerMessengerReader)
     {
         _messagingService = messagingService;
-        _dbContext = dbContext;
-        _settingsReader = settingsReader;
+        _messengerContactRepository = messengerContactRepository;
+        _ownerMessengerReader = ownerMessengerReader;
     }
 
     public override async Task<SkillResult> ExecuteAsync(
@@ -57,18 +69,24 @@ public class SendMessageSkill : BaseSkillImplementation
         var content = GetRequiredString(parameters, "content");
         var contentType = GetParameter<string>(parameters, "contentType", "text")!;
 
-        var resolvedPhone = await ResolveRecipientAsync(recipient, provider, cancellationToken);
-        if (resolvedPhone == null)
+        var resolved = await ResolveRecipientAsync(recipient, provider, cancellationToken);
+        if (resolved == null)
         {
-            if (SelfAliases.Contains(recipient.Trim()))
+            var trimmed = recipient.Trim();
+            if (SelfAliases.Contains(trimmed))
             {
-                return SkillResult.Error($"No '{provider}' identifier is configured for the owner. Open Settings -> Adresse Sekretariat and fill in the {provider} field.");
+                return SkillResult.Error($"No '{provider}' identifier is configured for the owner. Open Settings -> Owner-Messenger and add a {provider} entry.");
             }
 
-            return SkillResult.Error($"No phone number found for '{recipient}'. The client must have a mobile or phone number stored in Klacks.");
+            if (ProviderToMessengerType.TryGetValue(provider, out var messengerType))
+            {
+                return SkillResult.Error($"No {messengerType} contact found for '{recipient}'. The client must have a {messengerType} entry in their Messenger tab.");
+            }
+
+            return SkillResult.Error($"Unknown messaging provider '{provider}'.");
         }
 
-        var request = new SendMessageRequest(resolvedPhone.PhoneNumber, content, contentType);
+        var request = new SendMessageRequest(resolved.Identifier, content, contentType);
         var result = await _messagingService.SendMessageAsync(provider, request, cancellationToken);
 
         if (!result.Success)
@@ -80,80 +98,55 @@ public class SendMessageSkill : BaseSkillImplementation
             new
             {
                 Provider = provider,
-                Recipient = resolvedPhone.DisplayName,
-                PhoneNumber = resolvedPhone.PhoneNumber,
+                Recipient = resolved.DisplayName,
+                Identifier = resolved.Identifier,
                 MessageId = result.ExternalMessageId,
                 Status = "sent"
             },
-            $"Message sent successfully via {provider} to {resolvedPhone.DisplayName} ({resolvedPhone.PhoneNumber}).");
+            $"Message sent successfully via {provider} to {resolved.DisplayName} ({resolved.Identifier}).");
     }
 
-    private async Task<ResolvedPhone?> ResolveSelfAsync(string provider)
-    {
-        if (!ProviderToOwnerSettingKey.TryGetValue(provider, out var settingKey))
-            return null;
-
-        var ownerId = await _settingsReader.GetSettingAsync(settingKey);
-        if (string.IsNullOrWhiteSpace(ownerId))
-            return null;
-
-        var ownerName = await _settingsReader.GetSettingAsync("APP_ADDRESS_NAME");
-        var displayName = string.IsNullOrWhiteSpace(ownerName) ? "Self" : ownerName!;
-        return new ResolvedPhone(displayName, ownerId.Trim());
-    }
-
-    private async Task<ResolvedPhone?> ResolveRecipientAsync(string recipient, string provider, CancellationToken ct)
+    private async Task<ResolvedRecipient?> ResolveRecipientAsync(string recipient, string provider, CancellationToken ct)
     {
         var trimmed = recipient.Trim();
 
+        if (!ProviderToMessengerType.TryGetValue(provider, out var messengerType))
+        {
+            return IsPhoneNumber(trimmed) ? new ResolvedRecipient(trimmed, trimmed) : null;
+        }
+
         if (SelfAliases.Contains(trimmed))
         {
-            return await ResolveSelfAsync(provider);
+            return await ResolveSelfAsync(messengerType, ct);
         }
 
-        if (IsPhoneNumber(recipient))
+        if (IsPhoneNumber(trimmed))
         {
-            return new ResolvedPhone(recipient, recipient);
+            return new ResolvedRecipient(trimmed, trimmed);
         }
 
-        var keywords = recipient.Trim().ToLower().Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        if (keywords.Length == 0)
+        return await ResolveByClientNameAsync(trimmed, messengerType, ct);
+    }
+
+    private async Task<ResolvedRecipient?> ResolveSelfAsync(MessengerType messengerType, CancellationToken ct)
+    {
+        var ownerEntry = await _ownerMessengerReader.GetByTypeAsync(messengerType, ct);
+        if (ownerEntry == null)
             return null;
 
-        var whereClauses = keywords.Select((_, i) => $"(LOWER(COALESCE(c.\"FirstName\", '')) LIKE @p{i} OR LOWER(COALESCE(c.\"Name\", '')) LIKE @p{i} OR LOWER(COALESCE(c.\"Company\", '')) LIKE @p{i})");
-        var whereClause = string.Join(" AND ", whereClauses);
+        var ownerName = await _ownerMessengerReader.GetOwnerDisplayNameAsync(ct);
+        var displayName = string.IsNullOrWhiteSpace(ownerName) ? "Self" : ownerName!;
+        return new ResolvedRecipient(displayName, ownerEntry.Value.Trim());
+    }
 
-        var sql = $"""
-            SELECT c."Id", COALESCE(c."FirstName", '') AS "FirstName", COALESCE(c."Name", '') AS "Name",
-                   cm."Value" AS "Phone", cm."Type" AS "CommType"
-            FROM "Client" c
-            INNER JOIN "Communication" cm ON cm."ClientId" = c."Id" AND cm."IsDeleted" = false
-            WHERE c."IsDeleted" = false
-              AND cm."Type" IN (1, 3, 0, 2)
-              AND {whereClause}
-            ORDER BY CASE cm."Type" WHEN 1 THEN 1 WHEN 3 THEN 2 WHEN 0 THEN 3 WHEN 2 THEN 4 END
-            LIMIT 1
-            """;
-
-        var npgsqlParams = keywords.Select((k, i) => new Npgsql.NpgsqlParameter($"@p{i}", $"%{k}%")).ToArray();
-
-        try
-        {
-            var rows = await _dbContext.Database
-                .SqlQueryRaw<ClientPhoneRow>(sql, npgsqlParams)
-                .ToListAsync(ct);
-
-            var row = rows.FirstOrDefault();
-            if (row == null)
-                return null;
-
-            var displayName = $"{row.FirstName} {row.Name}".Trim();
-            return new ResolvedPhone(displayName, row.Phone);
-        }
-        catch
-        {
+    private async Task<ResolvedRecipient?> ResolveByClientNameAsync(string nameQuery, MessengerType messengerType, CancellationToken ct)
+    {
+        var matches = await _messengerContactRepository.SearchByClientNameAsync(nameQuery, messengerType, ct);
+        var contact = matches.FirstOrDefault();
+        if (contact == null)
             return null;
-        }
+
+        return new ResolvedRecipient(nameQuery, contact.Value.Trim());
     }
 
     private static bool IsPhoneNumber(string value)
@@ -164,14 +157,5 @@ public class SendMessageSkill : BaseSkillImplementation
         return trimmed.All(c => char.IsDigit(c) || c == '-' || c == ' ');
     }
 
-    private record ResolvedPhone(string DisplayName, string PhoneNumber);
-}
-
-internal class ClientPhoneRow
-{
-    public Guid Id { get; set; }
-    public string FirstName { get; set; } = string.Empty;
-    public string Name { get; set; } = string.Empty;
-    public string Phone { get; set; } = string.Empty;
-    public int CommType { get; set; }
+    private record ResolvedRecipient(string DisplayName, string Identifier);
 }
