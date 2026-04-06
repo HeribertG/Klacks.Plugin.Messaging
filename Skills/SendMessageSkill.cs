@@ -9,6 +9,7 @@
 /// <param name="content">Message text content</param>
 /// <param name="contentType">Content type: text, image, document (default: text)</param>
 
+using Klacks.Plugin.Contracts;
 using Klacks.Plugin.Contracts.Skills;
 using Klacks.Plugin.Messaging.Application.Interfaces;
 using Klacks.Plugin.Messaging.Domain.Models;
@@ -19,13 +20,31 @@ namespace Klacks.Plugin.Messaging.Skills;
 [SkillImplementation("send_message")]
 public class SendMessageSkill : BaseSkillImplementation
 {
+    private static readonly HashSet<string> SelfAliases = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "mir", "ich", "me", "myself", "self"
+    };
+
+    private static readonly Dictionary<string, string> ProviderToOwnerSettingKey = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["telegram"] = "APP_ADDRESS_TELEGRAM",
+        ["whatsapp"] = "APP_ADDRESS_WHATSAPP",
+        ["signal"] = "APP_ADDRESS_SIGNAL",
+        ["sms"] = "APP_ADDRESS_PHONE"
+    };
+
     private readonly IMessagingService _messagingService;
     private readonly DbContext _dbContext;
+    private readonly IPluginSettingsReader _settingsReader;
 
-    public SendMessageSkill(IMessagingService messagingService, DbContext dbContext)
+    public SendMessageSkill(
+        IMessagingService messagingService,
+        DbContext dbContext,
+        IPluginSettingsReader settingsReader)
     {
         _messagingService = messagingService;
         _dbContext = dbContext;
+        _settingsReader = settingsReader;
     }
 
     public override async Task<SkillResult> ExecuteAsync(
@@ -38,9 +57,14 @@ public class SendMessageSkill : BaseSkillImplementation
         var content = GetRequiredString(parameters, "content");
         var contentType = GetParameter<string>(parameters, "contentType", "text")!;
 
-        var resolvedPhone = await ResolveRecipientAsync(recipient, cancellationToken);
+        var resolvedPhone = await ResolveRecipientAsync(recipient, provider, cancellationToken);
         if (resolvedPhone == null)
         {
+            if (SelfAliases.Contains(recipient.Trim()))
+            {
+                return SkillResult.Error($"No '{provider}' identifier is configured for the owner. Open Settings -> Adresse Sekretariat and fill in the {provider} field.");
+            }
+
             return SkillResult.Error($"No phone number found for '{recipient}'. The client must have a mobile or phone number stored in Klacks.");
         }
 
@@ -64,8 +88,29 @@ public class SendMessageSkill : BaseSkillImplementation
             $"Message sent successfully via {provider} to {resolvedPhone.DisplayName} ({resolvedPhone.PhoneNumber}).");
     }
 
-    private async Task<ResolvedPhone?> ResolveRecipientAsync(string recipient, CancellationToken ct)
+    private async Task<ResolvedPhone?> ResolveSelfAsync(string provider)
     {
+        if (!ProviderToOwnerSettingKey.TryGetValue(provider, out var settingKey))
+            return null;
+
+        var ownerId = await _settingsReader.GetSettingAsync(settingKey);
+        if (string.IsNullOrWhiteSpace(ownerId))
+            return null;
+
+        var ownerName = await _settingsReader.GetSettingAsync("APP_ADDRESS_NAME");
+        var displayName = string.IsNullOrWhiteSpace(ownerName) ? "Self" : ownerName!;
+        return new ResolvedPhone(displayName, ownerId.Trim());
+    }
+
+    private async Task<ResolvedPhone?> ResolveRecipientAsync(string recipient, string provider, CancellationToken ct)
+    {
+        var trimmed = recipient.Trim();
+
+        if (SelfAliases.Contains(trimmed))
+        {
+            return await ResolveSelfAsync(provider);
+        }
+
         if (IsPhoneNumber(recipient))
         {
             return new ResolvedPhone(recipient, recipient);
