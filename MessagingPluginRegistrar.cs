@@ -36,10 +36,20 @@ public class MessagingPluginRegistrar : IPluginRegistrar
         services.AddHttpClient<WhatsAppMessagingProvider>();
         services.AddHttpClient<SignalMessagingProvider>();
         services.AddHttpClient<SmsMessagingProvider>();
+        services.AddHttpClient<ThreemaMessagingProvider>();
+        services.AddHttpClient<ViberMessagingProvider>();
+        services.AddHttpClient<LineMessagingProvider>();
+        services.AddHttpClient<KakaoTalkMessagingProvider>();
+        services.AddHttpClient<WeChatMessagingProvider>();
+        services.AddHttpClient<ZaloMessagingProvider>();
+        services.AddHttpClient<TeamsMessagingProvider>();
+        services.AddHttpClient<SlackMessagingProvider>();
 
         services.AddScoped<SendMessageSkill>();
         services.AddScoped<ReadMessagesSkill>();
         services.AddScoped<ListMessagingProvidersSkill>();
+
+        services.AddScoped<IPluginOperationalCheck, MessagingOperationalCheck>();
 
         var messageRetentionEnabled = configuration.GetValue<bool>("BackgroundServices:MessageRetention", true);
 

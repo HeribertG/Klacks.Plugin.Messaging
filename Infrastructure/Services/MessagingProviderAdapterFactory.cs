@@ -27,6 +27,14 @@ public class MessagingProviderAdapterFactory
             MessagingConstants.ProviderWhatsApp => _serviceProvider.GetRequiredService<WhatsAppMessagingProvider>(),
             MessagingConstants.ProviderSignal => _serviceProvider.GetRequiredService<SignalMessagingProvider>(),
             MessagingConstants.ProviderSms => _serviceProvider.GetRequiredService<SmsMessagingProvider>(),
+            MessagingConstants.ProviderThreema => _serviceProvider.GetRequiredService<ThreemaMessagingProvider>(),
+            MessagingConstants.ProviderViber => _serviceProvider.GetRequiredService<ViberMessagingProvider>(),
+            MessagingConstants.ProviderLine => _serviceProvider.GetRequiredService<LineMessagingProvider>(),
+            MessagingConstants.ProviderKakaoTalk => _serviceProvider.GetRequiredService<KakaoTalkMessagingProvider>(),
+            MessagingConstants.ProviderWeChat => _serviceProvider.GetRequiredService<WeChatMessagingProvider>(),
+            MessagingConstants.ProviderZalo => _serviceProvider.GetRequiredService<ZaloMessagingProvider>(),
+            MessagingConstants.ProviderTeams => _serviceProvider.GetRequiredService<TeamsMessagingProvider>(),
+            MessagingConstants.ProviderSlack => _serviceProvider.GetRequiredService<SlackMessagingProvider>(),
             _ => throw new ArgumentException($"Unknown messaging provider type: {providerType}")
         };
     }

@@ -13,6 +13,14 @@ public static class MessagingConstants
     public const string ProviderTelegram = "Telegram";
     public const string ProviderSignal = "Signal";
     public const string ProviderSms = "SMS";
+    public const string ProviderThreema = "Threema";
+    public const string ProviderViber = "Viber";
+    public const string ProviderLine = "LINE";
+    public const string ProviderKakaoTalk = "KakaoTalk";
+    public const string ProviderWeChat = "WeChat";
+    public const string ProviderZalo = "Zalo";
+    public const string ProviderTeams = "MicrosoftTeams";
+    public const string ProviderSlack = "Slack";
 
     public const int DefaultRetentionCount = 1000;
     public const string DefaultContentType = "text";
