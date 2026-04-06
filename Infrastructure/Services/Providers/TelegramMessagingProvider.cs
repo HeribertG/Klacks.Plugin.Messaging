@@ -36,7 +36,10 @@ public class TelegramMessagingProvider : IMessagingProviderAdapter
             return new SendMessageResult(false, ErrorMessage: "Invalid Telegram configuration: missing BotToken");
 
         var url = $"https://api.telegram.org/bot{config.BotToken}/sendMessage";
-        var payload = new { chat_id = request.Recipient, text = request.Content };
+        object chatId = long.TryParse(request.Recipient, out var numericId)
+            ? numericId
+            : request.Recipient;
+        var payload = new { chat_id = chatId, text = request.Content };
         var content = new StringContent(JsonSerializer.Serialize(payload), System.Text.Encoding.UTF8, "application/json");
 
         try

@@ -42,7 +42,7 @@ public class MessagingService : IMessagingService
 
     public async Task<SendMessageResult> SendMessageAsync(string providerName, SendMessageRequest request, CancellationToken ct = default)
     {
-        var provider = await _providerRepository.GetByNameAsync(providerName);
+        var provider = await ResolveProviderAsync(providerName);
         if (provider == null)
             return new SendMessageResult(false, ErrorMessage: $"Provider '{providerName}' not found");
 
@@ -91,7 +91,7 @@ public class MessagingService : IMessagingService
 
     public async Task<Message> ProcessIncomingMessageAsync(string providerName, string body, string? signature, CancellationToken ct = default)
     {
-        var provider = await _providerRepository.GetByNameAsync(providerName);
+        var provider = await ResolveProviderAsync(providerName);
         if (provider == null)
             throw new InvalidOperationException($"Provider '{providerName}' not found");
 
@@ -136,5 +136,16 @@ public class MessagingService : IMessagingService
 
         var adapter = _adapterFactory.Create(provider.ProviderType);
         return await adapter.ValidateConfigAsync(provider.ConfigJson, ct);
+    }
+
+    private async Task<MessagingProvider?> ResolveProviderAsync(string nameOrType)
+    {
+        var byName = await _providerRepository.GetByNameAsync(nameOrType);
+        if (byName != null)
+            return byName;
+
+        var enabled = await _providerRepository.GetEnabledAsync();
+        return enabled.FirstOrDefault(p =>
+            string.Equals(p.ProviderType, nameOrType, StringComparison.OrdinalIgnoreCase));
     }
 }
