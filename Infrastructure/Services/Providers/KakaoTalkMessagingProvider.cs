@@ -19,6 +19,8 @@ public class KakaoTalkMessagingProvider : IMessagingProviderAdapter
 
     public string ProviderType => MessagingConstants.ProviderKakaoTalk;
 
+    public bool SupportsPhoneAsRecipient => false;
+
     public KakaoTalkMessagingProvider(HttpClient httpClient, ILogger<KakaoTalkMessagingProvider> logger)
     {
         _httpClient = httpClient;

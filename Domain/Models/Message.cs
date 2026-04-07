@@ -22,6 +22,8 @@ public class Message
 
     public Guid? ClientId { get; set; }
 
+    public Guid? BroadcastId { get; set; }
+
     public string ExternalMessageId { get; set; } = string.Empty;
 
     public string Sender { get; set; } = string.Empty;

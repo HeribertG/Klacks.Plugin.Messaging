@@ -19,6 +19,8 @@ public class LineMessagingProvider : IMessagingProviderAdapter
 
     public string ProviderType => MessagingConstants.ProviderLine;
 
+    public bool SupportsPhoneAsRecipient => false;
+
     public LineMessagingProvider(HttpClient httpClient, ILogger<LineMessagingProvider> logger)
     {
         _httpClient = httpClient;

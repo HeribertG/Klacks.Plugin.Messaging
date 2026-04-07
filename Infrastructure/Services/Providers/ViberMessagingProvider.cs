@@ -19,6 +19,8 @@ public class ViberMessagingProvider : IMessagingProviderAdapter
 
     public string ProviderType => MessagingConstants.ProviderViber;
 
+    public bool SupportsPhoneAsRecipient => true;
+
     public ViberMessagingProvider(HttpClient httpClient, ILogger<ViberMessagingProvider> logger)
     {
         _httpClient = httpClient;

@@ -18,6 +18,15 @@ public interface IMessagingProviderAdapter
 {
     string ProviderType { get; }
 
+    /// <summary>
+    /// Indicates whether this provider accepts a plain mobile phone number as recipient.
+    /// True for WhatsApp, Signal, SMS, Viber. False for Telegram, Threema, LINE, KakaoTalk,
+    /// WeChat, Zalo, Microsoft Teams, Slack where an explicit external identifier is required.
+    /// Used by the broadcast flow to fall back to Client.Communication when no MessengerContact
+    /// exists for the target client.
+    /// </summary>
+    bool SupportsPhoneAsRecipient { get; }
+
     Task<SendMessageResult> SendAsync(SendMessageRequest request, string configJson, CancellationToken ct = default);
 
     Task<bool> ValidateConfigAsync(string configJson, CancellationToken ct = default);

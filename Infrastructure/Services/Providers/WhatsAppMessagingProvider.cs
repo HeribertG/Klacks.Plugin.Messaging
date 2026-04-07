@@ -19,6 +19,8 @@ public class WhatsAppMessagingProvider : IMessagingProviderAdapter
 
     public string ProviderType => MessagingConstants.ProviderWhatsApp;
 
+    public bool SupportsPhoneAsRecipient => true;
+
     public WhatsAppMessagingProvider(HttpClient httpClient, ILogger<WhatsAppMessagingProvider> logger)
     {
         _httpClient = httpClient;

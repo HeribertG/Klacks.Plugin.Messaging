@@ -23,6 +23,8 @@ public class TelegramMessagingProvider : IMessagingProviderAdapter
 
     public string ProviderType => MessagingConstants.ProviderTelegram;
 
+    public bool SupportsPhoneAsRecipient => false;
+
     public TelegramMessagingProvider(HttpClient httpClient, ILogger<TelegramMessagingProvider> logger)
     {
         _httpClient = httpClient;

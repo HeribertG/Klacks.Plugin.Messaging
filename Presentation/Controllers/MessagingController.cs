@@ -141,6 +141,49 @@ public class MessagingController : ControllerBase
         return Ok(result);
     }
 
+    [HttpGet("broadcast/preview")]
+    public async Task<ActionResult<BroadcastPreview>> PreviewBroadcast([FromQuery] string provider, [FromQuery] Guid groupId)
+    {
+        if (string.IsNullOrWhiteSpace(provider))
+            return BadRequest(new { error = "provider is required" });
+
+        if (groupId == Guid.Empty)
+            return BadRequest(new { error = "groupId is required" });
+
+        try
+        {
+            var preview = await _messagingService.PreviewBroadcastAsync(provider, groupId);
+            return Ok(preview);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    [HttpPost("broadcast/send")]
+    public async Task<ActionResult<BroadcastSendResult>> SendBroadcast([FromBody] SendBroadcastDto dto)
+    {
+        if (string.IsNullOrWhiteSpace(dto.Provider))
+            return BadRequest(new { error = "provider is required" });
+
+        if (dto.GroupId == Guid.Empty)
+            return BadRequest(new { error = "groupId is required" });
+
+        if (string.IsNullOrWhiteSpace(dto.Content))
+            return BadRequest(new { error = "content is required" });
+
+        try
+        {
+            var result = await _messagingService.SendBroadcastAsync(dto.Provider, dto.GroupId, dto.Content, dto.ContentType ?? "text");
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
     private static MessagingProviderDto ToDto(MessagingProvider p) => new()
     {
         Id = p.Id,

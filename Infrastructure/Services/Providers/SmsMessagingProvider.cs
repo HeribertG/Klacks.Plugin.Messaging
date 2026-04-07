@@ -19,6 +19,8 @@ public class SmsMessagingProvider : IMessagingProviderAdapter
 
     public string ProviderType => MessagingConstants.ProviderSms;
 
+    public bool SupportsPhoneAsRecipient => true;
+
     public SmsMessagingProvider(HttpClient httpClient, ILogger<SmsMessagingProvider> logger)
     {
         _httpClient = httpClient;

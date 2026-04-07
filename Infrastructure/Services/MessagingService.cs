@@ -23,6 +23,8 @@ public class MessagingService : IMessagingService
     private readonly IMessagingProviderRepository _providerRepository;
     private readonly IMessageRepository _messageRepository;
     private readonly IMessengerContactRepository _messengerContactRepository;
+    private readonly IClientGroupReader _clientGroupReader;
+    private readonly IClientPhoneReader _clientPhoneReader;
     private readonly IPluginUnitOfWork _unitOfWork;
     private readonly MessagingProviderAdapterFactory _adapterFactory;
     private readonly ILogger<MessagingService> _logger;
@@ -31,6 +33,8 @@ public class MessagingService : IMessagingService
         IMessagingProviderRepository providerRepository,
         IMessageRepository messageRepository,
         IMessengerContactRepository messengerContactRepository,
+        IClientGroupReader clientGroupReader,
+        IClientPhoneReader clientPhoneReader,
         IPluginUnitOfWork unitOfWork,
         MessagingProviderAdapterFactory adapterFactory,
         ILogger<MessagingService> logger)
@@ -38,6 +42,8 @@ public class MessagingService : IMessagingService
         _providerRepository = providerRepository;
         _messageRepository = messageRepository;
         _messengerContactRepository = messengerContactRepository;
+        _clientGroupReader = clientGroupReader;
+        _clientPhoneReader = clientPhoneReader;
         _unitOfWork = unitOfWork;
         _adapterFactory = adapterFactory;
         _logger = logger;
@@ -151,6 +157,154 @@ public class MessagingService : IMessagingService
 
         var adapter = _adapterFactory.Create(provider.ProviderType);
         return await adapter.ValidateConfigAsync(provider.ConfigJson, ct);
+    }
+
+    public async Task<BroadcastPreview> PreviewBroadcastAsync(string providerName, Guid groupId, CancellationToken ct = default)
+    {
+        var provider = await ResolveProviderAsync(providerName)
+            ?? throw new InvalidOperationException($"Provider '{providerName}' not found");
+
+        var adapter = _adapterFactory.Create(provider.ProviderType);
+        var clientIds = await _clientGroupReader.GetClientIdsInGroupAsync(groupId, ct);
+
+        if (clientIds.Count == 0)
+        {
+            return new BroadcastPreview(0, 0, 0, 0, adapter.SupportsPhoneAsRecipient);
+        }
+
+        if (!Enum.TryParse<MessengerType>(provider.ProviderType, ignoreCase: true, out var messengerType))
+        {
+            throw new InvalidOperationException($"Cannot map provider type '{provider.ProviderType}' to MessengerType");
+        }
+
+        var contactCount = 0;
+        var phoneCount = 0;
+        var skipped = 0;
+
+        IReadOnlyDictionary<Guid, string?> phoneFallbacks = adapter.SupportsPhoneAsRecipient
+            ? await _clientPhoneReader.GetMobilePhonesAsync(clientIds, ct)
+            : new Dictionary<Guid, string?>();
+
+        foreach (var clientId in clientIds)
+        {
+            var contact = await _messengerContactRepository.GetByClientAndTypeAsync(clientId, messengerType, ct);
+            if (contact != null && !string.IsNullOrWhiteSpace(contact.Value))
+            {
+                contactCount++;
+                continue;
+            }
+
+            if (adapter.SupportsPhoneAsRecipient
+                && phoneFallbacks.TryGetValue(clientId, out var phone)
+                && !string.IsNullOrWhiteSpace(phone))
+            {
+                phoneCount++;
+                continue;
+            }
+
+            skipped++;
+        }
+
+        return new BroadcastPreview(clientIds.Count, contactCount, phoneCount, skipped, adapter.SupportsPhoneAsRecipient);
+    }
+
+    public async Task<BroadcastSendResult> SendBroadcastAsync(string providerName, Guid groupId, string content, string contentType = "text", CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(content))
+            throw new ArgumentException("Broadcast content must not be empty", nameof(content));
+
+        var provider = await ResolveProviderAsync(providerName)
+            ?? throw new InvalidOperationException($"Provider '{providerName}' not found");
+
+        if (!provider.IsEnabled)
+            throw new InvalidOperationException($"Provider '{providerName}' is disabled");
+
+        var adapter = _adapterFactory.Create(provider.ProviderType);
+        var clientIds = await _clientGroupReader.GetClientIdsInGroupAsync(groupId, ct);
+
+        if (clientIds.Count == 0)
+            throw new InvalidOperationException("Group is empty");
+
+        if (!Enum.TryParse<MessengerType>(provider.ProviderType, ignoreCase: true, out var messengerType))
+            throw new InvalidOperationException($"Cannot map provider type '{provider.ProviderType}' to MessengerType");
+
+        IReadOnlyDictionary<Guid, string?> phoneFallbacks = adapter.SupportsPhoneAsRecipient
+            ? await _clientPhoneReader.GetMobilePhonesAsync(clientIds, ct)
+            : new Dictionary<Guid, string?>();
+
+        var recipients = new List<(Guid clientId, string recipient, string? displayName)>();
+        var skipped = 0;
+
+        foreach (var clientId in clientIds)
+        {
+            var contact = await _messengerContactRepository.GetByClientAndTypeAsync(clientId, messengerType, ct);
+            if (contact != null && !string.IsNullOrWhiteSpace(contact.Value))
+            {
+                recipients.Add((clientId, contact.Value, contact.Description));
+                continue;
+            }
+
+            if (adapter.SupportsPhoneAsRecipient
+                && phoneFallbacks.TryGetValue(clientId, out var phone)
+                && !string.IsNullOrWhiteSpace(phone))
+            {
+                recipients.Add((clientId, phone!, null));
+                continue;
+            }
+
+            skipped++;
+        }
+
+        if (recipients.Count == 0)
+            throw new InvalidOperationException($"No recipients with messenger contact or phone fallback for provider '{providerName}'");
+
+        var broadcastId = Guid.NewGuid();
+        var sent = 0;
+        var failed = 0;
+
+        foreach (var (clientId, recipient, displayName) in recipients)
+        {
+            var request = new SendMessageRequest(recipient, content, contentType);
+            SendMessageResult result;
+            try
+            {
+                result = await adapter.SendAsync(request, provider.ConfigJson, ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Broadcast {BroadcastId} send failed for client {ClientId}", broadcastId, clientId);
+                result = new SendMessageResult(false, ErrorMessage: ex.Message);
+            }
+
+            var message = new Message
+            {
+                Id = Guid.NewGuid(),
+                ProviderId = provider.Id,
+                ClientId = clientId,
+                BroadcastId = broadcastId,
+                ExternalMessageId = result.ExternalMessageId ?? string.Empty,
+                Recipient = recipient,
+                RecipientDisplayName = displayName ?? string.Empty,
+                Content = content,
+                ContentType = contentType,
+                Direction = MessageDirection.Outbound,
+                Status = result.Success ? MessageStatus.Sent : MessageStatus.Failed,
+                ErrorMessage = result.ErrorMessage,
+                Timestamp = DateTime.UtcNow,
+            };
+
+            await _messageRepository.AddAsync(message);
+
+            if (result.Success) sent++; else failed++;
+        }
+
+        await _unitOfWork.CompleteAsync();
+
+        _logger.LogInformation(
+            "Broadcast {BroadcastId} via {Provider}: total={Total} sent={Sent} failed={Failed} skipped={Skipped}",
+            broadcastId, providerName, clientIds.Count, sent, failed, skipped);
+
+        return new BroadcastSendResult(broadcastId, clientIds.Count, sent, failed, skipped);
     }
 
     private async Task<MessagingProvider?> ResolveProviderAsync(string nameOrType)

@@ -19,6 +19,8 @@ public class SlackMessagingProvider : IMessagingProviderAdapter
 
     public string ProviderType => MessagingConstants.ProviderSlack;
 
+    public bool SupportsPhoneAsRecipient => false;
+
     public SlackMessagingProvider(HttpClient httpClient, ILogger<SlackMessagingProvider> logger)
     {
         _httpClient = httpClient;

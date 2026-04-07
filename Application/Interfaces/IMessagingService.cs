@@ -30,4 +30,8 @@ public interface IMessagingService
     Task<Message> ProcessIncomingMessageAsync(string providerName, string body, string? signature, CancellationToken ct = default);
 
     Task<bool> TestProviderAsync(Guid providerId, CancellationToken ct = default);
+
+    Task<BroadcastPreview> PreviewBroadcastAsync(string providerName, Guid groupId, CancellationToken ct = default);
+
+    Task<BroadcastSendResult> SendBroadcastAsync(string providerName, Guid groupId, string content, string contentType = "text", CancellationToken ct = default);
 }

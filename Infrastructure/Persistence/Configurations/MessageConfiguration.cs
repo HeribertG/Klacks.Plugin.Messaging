@@ -30,5 +30,6 @@ public class MessageConfiguration : IEntityTypeConfiguration<Message>
         builder.HasIndex(m => new { m.ProviderId, m.Timestamp }).IsDescending(false, true);
         builder.HasIndex(m => m.Direction);
         builder.HasIndex(m => m.ClientId);
+        builder.HasIndex(m => m.BroadcastId);
     }
 }

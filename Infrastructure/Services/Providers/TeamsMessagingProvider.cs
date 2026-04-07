@@ -19,6 +19,8 @@ public class TeamsMessagingProvider : IMessagingProviderAdapter
 
     public string ProviderType => MessagingConstants.ProviderTeams;
 
+    public bool SupportsPhoneAsRecipient => false;
+
     public TeamsMessagingProvider(HttpClient httpClient, ILogger<TeamsMessagingProvider> logger)
     {
         _httpClient = httpClient;

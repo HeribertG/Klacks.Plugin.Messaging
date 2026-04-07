@@ -19,6 +19,8 @@ public class WeChatMessagingProvider : IMessagingProviderAdapter
 
     public string ProviderType => MessagingConstants.ProviderWeChat;
 
+    public bool SupportsPhoneAsRecipient => false;
+
     public WeChatMessagingProvider(HttpClient httpClient, ILogger<WeChatMessagingProvider> logger)
     {
         _httpClient = httpClient;

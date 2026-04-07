@@ -19,6 +19,8 @@ public class ZaloMessagingProvider : IMessagingProviderAdapter
 
     public string ProviderType => MessagingConstants.ProviderZalo;
 
+    public bool SupportsPhoneAsRecipient => false;
+
     public ZaloMessagingProvider(HttpClient httpClient, ILogger<ZaloMessagingProvider> logger)
     {
         _httpClient = httpClient;

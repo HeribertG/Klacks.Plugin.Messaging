@@ -19,6 +19,8 @@ public class SignalMessagingProvider : IMessagingProviderAdapter
 
     public string ProviderType => MessagingConstants.ProviderSignal;
 
+    public bool SupportsPhoneAsRecipient => true;
+
     public SignalMessagingProvider(HttpClient httpClient, ILogger<SignalMessagingProvider> logger)
     {
         _httpClient = httpClient;

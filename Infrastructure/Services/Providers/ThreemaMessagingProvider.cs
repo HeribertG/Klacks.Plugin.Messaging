@@ -19,6 +19,8 @@ public class ThreemaMessagingProvider : IMessagingProviderAdapter
 
     public string ProviderType => MessagingConstants.ProviderThreema;
 
+    public bool SupportsPhoneAsRecipient => false;
+
     public ThreemaMessagingProvider(HttpClient httpClient, ILogger<ThreemaMessagingProvider> logger)
     {
         _httpClient = httpClient;
