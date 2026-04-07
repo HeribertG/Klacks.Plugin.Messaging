@@ -40,12 +40,15 @@ public class MessageRepository : IMessageRepository
         if (!string.IsNullOrWhiteSpace(sender))
             query = query.Where(m => m.Sender == sender);
 
-        return await query
+        var pageDesc = await query
             .OrderByDescending(m => m.Timestamp)
             .Skip(offset)
             .Take(count)
             .AsNoTracking()
             .ToListAsync();
+
+        pageDesc.Reverse();
+        return pageDesc;
     }
 
     public async Task<int> GetMessageCountAsync(Guid providerId)

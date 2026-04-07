@@ -118,7 +118,7 @@ public class MessagingController : ControllerBase
         [FromQuery] Guid? providerId = null,
         [FromQuery] MessageDirection? direction = null,
         [FromQuery] string? sender = null,
-        [FromQuery] int count = 20,
+        [FromQuery] int count = 50,
         [FromQuery] int offset = 0)
     {
         var messages = await _messagingService.GetMessagesAsync(providerId, direction, sender, count, offset);

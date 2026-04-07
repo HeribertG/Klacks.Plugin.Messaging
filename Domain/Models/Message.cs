@@ -7,6 +7,7 @@
 /// <param name="ProviderId">Foreign key to the MessagingProvider that handled this message</param>
 /// <param name="Direction">Whether the message is inbound or outbound</param>
 /// <param name="Status">Current delivery status of the message</param>
+/// <param name="ClientId">Optional foreign key to the Klacks client resolved via MessengerContact lookup</param>
 using System.ComponentModel.DataAnnotations;
 using Klacks.Plugin.Messaging.Domain.Enums;
 
@@ -18,6 +19,8 @@ public class Message
     public Guid Id { get; set; }
 
     public Guid ProviderId { get; set; }
+
+    public Guid? ClientId { get; set; }
 
     public string ExternalMessageId { get; set; } = string.Empty;
 

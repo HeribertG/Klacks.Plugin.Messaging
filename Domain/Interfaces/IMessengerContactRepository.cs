@@ -18,6 +18,8 @@ public interface IMessengerContactRepository
 
     Task<IReadOnlyList<MessengerContact>> SearchByClientNameAsync(string nameQuery, MessengerType type, CancellationToken ct = default);
 
+    Task<MessengerContact?> GetByTypeAndValueAsync(MessengerType type, string value, CancellationToken ct = default);
+
     Task AddAsync(MessengerContact contact, CancellationToken ct = default);
 
     Task UpdateAsync(MessengerContact contact, CancellationToken ct = default);

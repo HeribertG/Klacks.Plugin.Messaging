@@ -71,6 +71,18 @@ public class MessengerContactRepository : IMessengerContactRepository
             .ToListAsync(ct);
     }
 
+    public async Task<MessengerContact?> GetByTypeAndValueAsync(MessengerType type, string value, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        return await _context.Set<MessengerContact>()
+            .Where(c => c.Type == type && c.Value == value && !c.IsDeleted)
+            .OrderBy(c => c.CreateTime)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(ct);
+    }
+
     public async Task AddAsync(MessengerContact contact, CancellationToken ct = default)
     {
         await _context.Set<MessengerContact>().AddAsync(contact, ct);

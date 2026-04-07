@@ -22,6 +22,7 @@ public class MessagingService : IMessagingService
 {
     private readonly IMessagingProviderRepository _providerRepository;
     private readonly IMessageRepository _messageRepository;
+    private readonly IMessengerContactRepository _messengerContactRepository;
     private readonly IPluginUnitOfWork _unitOfWork;
     private readonly MessagingProviderAdapterFactory _adapterFactory;
     private readonly ILogger<MessagingService> _logger;
@@ -29,12 +30,14 @@ public class MessagingService : IMessagingService
     public MessagingService(
         IMessagingProviderRepository providerRepository,
         IMessageRepository messageRepository,
+        IMessengerContactRepository messengerContactRepository,
         IPluginUnitOfWork unitOfWork,
         MessagingProviderAdapterFactory adapterFactory,
         ILogger<MessagingService> logger)
     {
         _providerRepository = providerRepository;
         _messageRepository = messageRepository;
+        _messengerContactRepository = messengerContactRepository;
         _unitOfWork = unitOfWork;
         _adapterFactory = adapterFactory;
         _logger = logger;
@@ -105,10 +108,22 @@ public class MessagingService : IMessagingService
         if (incoming == null)
             throw new InvalidOperationException($"Failed to parse webhook payload for provider '{providerName}'");
 
+        Guid? clientId = null;
+        if (Enum.TryParse<MessengerType>(provider.ProviderType, ignoreCase: true, out var messengerType))
+        {
+            var contact = await _messengerContactRepository.GetByTypeAndValueAsync(messengerType, incoming.Sender, ct);
+            clientId = contact?.ClientId;
+        }
+        else
+        {
+            _logger.LogWarning("Cannot map provider type '{ProviderType}' to MessengerType for inbound contact lookup", provider.ProviderType);
+        }
+
         var message = new Message
         {
             Id = Guid.NewGuid(),
             ProviderId = provider.Id,
+            ClientId = clientId,
             ExternalMessageId = incoming.ExternalMessageId,
             Sender = incoming.Sender,
             SenderDisplayName = incoming.SenderDisplayName,
