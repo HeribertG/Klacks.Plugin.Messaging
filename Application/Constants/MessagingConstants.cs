@@ -33,4 +33,7 @@ public static class MessagingConstants
     /// Shape: [{ "type": int (MessengerType), "value": string, "description": string? }]
     /// </summary>
     public const string SettingOwnerMessengers = "APP_OWNER_MESSENGERS";
+
+    public const string SettingTelegramBotUsername = "TELEGRAM_BOT_USERNAME";
+    public const int BotUsernameCacheMinutes = 1440;
 }

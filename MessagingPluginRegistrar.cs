@@ -12,6 +12,7 @@ using Klacks.Plugin.Messaging.Application.Interfaces;
 using Klacks.Plugin.Messaging.Domain.Interfaces;
 using Klacks.Plugin.Messaging.Infrastructure.Persistence.Configurations;
 using Klacks.Plugin.Messaging.Infrastructure.Repositories;
+using Klacks.Plugin.Messaging.Application.Services;
 using Klacks.Plugin.Messaging.Infrastructure.Services;
 using Klacks.Plugin.Messaging.Infrastructure.Services.Providers;
 using Klacks.Plugin.Messaging.Skills;
@@ -27,9 +28,11 @@ public class MessagingPluginRegistrar : IPluginRegistrar
 
     public void RegisterServices(IServiceCollection services, IConfiguration configuration)
     {
+        services.AddMemoryCache();
         services.AddScoped<IMessageRepository, MessageRepository>();
         services.AddScoped<IMessagingProviderRepository, MessagingProviderRepository>();
         services.AddScoped<IMessengerContactRepository, MessengerContactRepository>();
+        services.AddScoped<ITelegramOnboardingTokenRepository, TelegramOnboardingTokenRepository>();
         services.AddScoped<IOwnerMessengerReader, OwnerMessengerReader>();
         services.AddScoped<IMessagingService, MessagingService>();
         services.AddScoped<MessagingProviderAdapterFactory>();
@@ -46,6 +49,10 @@ public class MessagingPluginRegistrar : IPluginRegistrar
         services.AddHttpClient<ZaloMessagingProvider>();
         services.AddHttpClient<TeamsMessagingProvider>();
         services.AddHttpClient<SlackMessagingProvider>();
+
+        services.AddScoped<IOnboardingSendService, OnboardingSendService>();
+        services.AddScoped<IOnboardingRolloutService, OnboardingRolloutService>();
+        services.AddScoped<ITelegramOnboardingRedemptionService, TelegramOnboardingRedemptionService>();
 
         services.AddScoped<SendMessageSkill>();
         services.AddScoped<ReadMessagesSkill>();
@@ -64,6 +71,7 @@ public class MessagingPluginRegistrar : IPluginRegistrar
         modelBuilder.ApplyConfiguration(new MessageConfiguration());
         modelBuilder.ApplyConfiguration(new MessagingProviderConfiguration());
         modelBuilder.ApplyConfiguration(new MessengerContactConfiguration());
+        modelBuilder.ApplyConfiguration(new TelegramOnboardingTokenConfiguration());
     }
 
     public IEnumerable<Assembly> GetControllerAssemblies()
