@@ -15,6 +15,8 @@ using Klacks.Plugin.Messaging.Domain.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Klacks.Plugin.Messaging.Presentation.Controllers;
 
@@ -27,15 +29,24 @@ public class MessagingController : ControllerBase
     private readonly IMessagingService _messagingService;
     private readonly IMessagingProviderRepository _providerRepository;
     private readonly IPluginUnitOfWork _unitOfWork;
+    private readonly IPluginSettingsReader _settingsReader;
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly ILogger<MessagingController> _logger;
 
     public MessagingController(
         IMessagingService messagingService,
         IMessagingProviderRepository providerRepository,
-        IPluginUnitOfWork unitOfWork)
+        IPluginUnitOfWork unitOfWork,
+        IPluginSettingsReader settingsReader,
+        IServiceScopeFactory scopeFactory,
+        ILogger<MessagingController> logger)
     {
         _messagingService = messagingService;
         _providerRepository = providerRepository;
         _unitOfWork = unitOfWork;
+        _settingsReader = settingsReader;
+        _scopeFactory = scopeFactory;
+        _logger = logger;
     }
 
     [HttpGet("providers")]
@@ -86,6 +97,9 @@ public class MessagingController : ControllerBase
         var provider = await _providerRepository.GetByIdAsync(id);
         if (provider == null) return NotFound();
 
+        var wasTelegramEnabled = provider.IsEnabled
+            && string.Equals(provider.ProviderType, MessagingConstants.ProviderTelegram, StringComparison.OrdinalIgnoreCase);
+
         provider.DisplayName = dto.DisplayName;
         provider.ProviderType = dto.ProviderType;
         provider.IsEnabled = dto.IsEnabled;
@@ -93,6 +107,32 @@ public class MessagingController : ControllerBase
         provider.UpdatedAt = DateTime.UtcNow;
 
         await _unitOfWork.CompleteAsync();
+
+        var isNowTelegramEnabled = dto.IsEnabled
+            && string.Equals(dto.ProviderType, MessagingConstants.ProviderTelegram, StringComparison.OrdinalIgnoreCase);
+
+        if (isNowTelegramEnabled && !wasTelegramEnabled)
+        {
+            var completed = await _settingsReader.GetSettingAsync(TelegramOnboardingConstants.RolloutCompletedSettingKey);
+            if (string.IsNullOrWhiteSpace(completed))
+            {
+                var capturedConfig = provider.ConfigJson;
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        using var scope = _scopeFactory.CreateScope();
+                        var rollout = scope.ServiceProvider.GetRequiredService<IOnboardingRolloutService>();
+                        await rollout.ExecuteAsync(capturedConfig);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Background Telegram onboarding rollout failed");
+                    }
+                });
+            }
+        }
+
         return Ok(ToDto(provider));
     }
 
