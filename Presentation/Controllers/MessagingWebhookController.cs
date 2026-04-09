@@ -4,6 +4,7 @@
 /// Webhook endpoint for receiving incoming messages from external messaging providers.
 /// Handles webhook verification and incoming message processing.
 /// </summary>
+using System.Text.Json;
 using Klacks.Plugin.Contracts;
 using Klacks.Plugin.Contracts.Filters;
 using Klacks.Plugin.Messaging.Application.Constants;
@@ -24,17 +25,20 @@ public class MessagingWebhookController : ControllerBase
     private readonly IMessagingService _messagingService;
     private readonly IMessagingProviderRepository _providerRepository;
     private readonly IPluginEventBus _eventBus;
+    private readonly ITelegramOnboardingRedemptionService _redemptionService;
     private readonly ILogger<MessagingWebhookController> _logger;
 
     public MessagingWebhookController(
         IMessagingService messagingService,
         IMessagingProviderRepository providerRepository,
         IPluginEventBus eventBus,
+        ITelegramOnboardingRedemptionService redemptionService,
         ILogger<MessagingWebhookController> logger)
     {
         _messagingService = messagingService;
         _providerRepository = providerRepository;
         _eventBus = eventBus;
+        _redemptionService = redemptionService;
         _logger = logger;
     }
 
@@ -46,6 +50,13 @@ public class MessagingWebhookController : ControllerBase
         var body = await reader.ReadToEndAsync();
         var signature = Request.Headers["X-Webhook-Signature"].FirstOrDefault()
             ?? Request.Headers["X-Telegram-Bot-Api-Secret-Token"].FirstOrDefault();
+
+        if (string.Equals(providerName, TelegramOnboardingConstants.ProviderName, StringComparison.OrdinalIgnoreCase))
+        {
+            var redeemed = await TryHandleStartCommandAsync(body, HttpContext.RequestAborted);
+            if (redeemed)
+                return Ok();
+        }
 
         try
         {
@@ -86,5 +97,49 @@ public class MessagingWebhookController : ControllerBase
             return Ok(challenge);
 
         return Ok("Webhook endpoint active");
+    }
+
+    private async Task<bool> TryHandleStartCommandAsync(string body, CancellationToken ct)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            if (!doc.RootElement.TryGetProperty("message", out var message))
+                return false;
+            if (!message.TryGetProperty("text", out var textEl))
+                return false;
+            var text = textEl.GetString();
+            if (string.IsNullOrWhiteSpace(text))
+                return false;
+            if (!text.StartsWith(TelegramOnboardingConstants.StartCommandPrefix, StringComparison.Ordinal))
+                return false;
+
+            var token = text[TelegramOnboardingConstants.StartCommandPrefix.Length..].Trim();
+            if (string.IsNullOrWhiteSpace(token))
+                return false;
+
+            if (!message.TryGetProperty("chat", out var chat))
+                return false;
+            if (!chat.TryGetProperty("id", out var chatIdEl))
+                return false;
+
+            var chatId = chatIdEl.ValueKind == JsonValueKind.Number
+                ? chatIdEl.GetInt64().ToString()
+                : chatIdEl.GetString();
+            if (string.IsNullOrWhiteSpace(chatId))
+                return false;
+
+            var result = await _redemptionService.RedeemAsync(token, chatId, ct);
+            _logger.LogInformation(
+                "Telegram onboarding redemption result {Result} for chat {ChatId}",
+                result,
+                chatId);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed parsing Telegram /start payload");
+            return false;
+        }
     }
 }
