@@ -11,12 +11,14 @@ using System.Text.Json;
 using Klacks.Plugin.Messaging.Application.Constants;
 using Klacks.Plugin.Messaging.Domain.Interfaces;
 using Klacks.Plugin.Messaging.Domain.Models;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace Klacks.Plugin.Messaging.Infrastructure.Services.Providers;
 
 public class TelegramMessagingProvider : IMessagingProviderAdapter
 {
     private readonly HttpClient _httpClient;
+    private readonly IMemoryCache _cache;
     private readonly ILogger<TelegramMessagingProvider> _logger;
 
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
@@ -25,10 +27,48 @@ public class TelegramMessagingProvider : IMessagingProviderAdapter
 
     public bool SupportsPhoneAsRecipient => false;
 
-    public TelegramMessagingProvider(HttpClient httpClient, ILogger<TelegramMessagingProvider> logger)
+    public TelegramMessagingProvider(HttpClient httpClient, IMemoryCache cache, ILogger<TelegramMessagingProvider> logger)
     {
         _httpClient = httpClient;
+        _cache = cache;
         _logger = logger;
+    }
+
+    public async Task<string?> GetBotUsernameAsync(string configJson, CancellationToken ct = default)
+    {
+        var config = JsonSerializer.Deserialize<TelegramConfig>(configJson, JsonOptions);
+        if (config == null || string.IsNullOrWhiteSpace(config.BotToken))
+            return null;
+
+        var cacheKey = $"telegram_bot_username_{config.BotToken.GetHashCode()}";
+        if (_cache.TryGetValue<string>(cacheKey, out var cached) && !string.IsNullOrEmpty(cached))
+            return cached;
+
+        try
+        {
+            var url = $"https://api.telegram.org/bot{config.BotToken}/getMe";
+            var response = await _httpClient.GetAsync(url, ct);
+            if (!response.IsSuccessStatusCode)
+                return null;
+
+            var json = await response.Content.ReadAsStringAsync(ct);
+            var result = JsonSerializer.Deserialize<JsonElement>(json, JsonOptions);
+            if (result.TryGetProperty("result", out var r) && r.TryGetProperty("username", out var username))
+            {
+                var value = username.GetString();
+                if (!string.IsNullOrWhiteSpace(value))
+                {
+                    _cache.Set(cacheKey, value, TimeSpan.FromMinutes(MessagingConstants.BotUsernameCacheMinutes));
+                    return value;
+                }
+            }
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to fetch Telegram bot username");
+            return null;
+        }
     }
 
     public async Task<SendMessageResult> SendAsync(SendMessageRequest request, string configJson, CancellationToken ct = default)

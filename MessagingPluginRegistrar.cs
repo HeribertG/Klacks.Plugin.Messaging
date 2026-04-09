@@ -27,6 +27,7 @@ public class MessagingPluginRegistrar : IPluginRegistrar
 
     public void RegisterServices(IServiceCollection services, IConfiguration configuration)
     {
+        services.AddMemoryCache();
         services.AddScoped<IMessageRepository, MessageRepository>();
         services.AddScoped<IMessagingProviderRepository, MessagingProviderRepository>();
         services.AddScoped<IMessengerContactRepository, MessengerContactRepository>();
