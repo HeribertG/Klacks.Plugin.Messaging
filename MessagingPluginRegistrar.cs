@@ -52,6 +52,7 @@ public class MessagingPluginRegistrar : IPluginRegistrar
 
         services.AddScoped<IOnboardingSendService, OnboardingSendService>();
         services.AddScoped<IOnboardingRolloutService, OnboardingRolloutService>();
+        services.AddScoped<ITelegramOnboardingRedemptionService, TelegramOnboardingRedemptionService>();
 
         services.AddScoped<SendMessageSkill>();
         services.AddScoped<ReadMessagesSkill>();
