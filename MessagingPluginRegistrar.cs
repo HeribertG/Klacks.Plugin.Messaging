@@ -51,6 +51,7 @@ public class MessagingPluginRegistrar : IPluginRegistrar
         services.AddHttpClient<SlackMessagingProvider>();
 
         services.AddScoped<IOnboardingSendService, OnboardingSendService>();
+        services.AddScoped<IOnboardingRolloutService, OnboardingRolloutService>();
 
         services.AddScoped<SendMessageSkill>();
         services.AddScoped<ReadMessagesSkill>();
