@@ -12,6 +12,7 @@ using Klacks.Plugin.Messaging.Application.Interfaces;
 using Klacks.Plugin.Messaging.Domain.Interfaces;
 using Klacks.Plugin.Messaging.Infrastructure.Persistence.Configurations;
 using Klacks.Plugin.Messaging.Infrastructure.Repositories;
+using Klacks.Plugin.Messaging.Application.Services;
 using Klacks.Plugin.Messaging.Infrastructure.Services;
 using Klacks.Plugin.Messaging.Infrastructure.Services.Providers;
 using Klacks.Plugin.Messaging.Skills;
@@ -48,6 +49,8 @@ public class MessagingPluginRegistrar : IPluginRegistrar
         services.AddHttpClient<ZaloMessagingProvider>();
         services.AddHttpClient<TeamsMessagingProvider>();
         services.AddHttpClient<SlackMessagingProvider>();
+
+        services.AddScoped<IOnboardingSendService, OnboardingSendService>();
 
         services.AddScoped<SendMessageSkill>();
         services.AddScoped<ReadMessagesSkill>();
