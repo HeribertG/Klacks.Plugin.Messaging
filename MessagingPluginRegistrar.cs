@@ -38,6 +38,7 @@ public class MessagingPluginRegistrar : IPluginRegistrar
         services.AddScoped<MessagingProviderAdapterFactory>();
 
         services.AddHttpClient<TelegramMessagingProvider>();
+        services.AddScoped<ITelegramBotMetadataProvider>(sp => sp.GetRequiredService<TelegramMessagingProvider>());
         services.AddHttpClient<WhatsAppMessagingProvider>();
         services.AddHttpClient<SignalMessagingProvider>();
         services.AddHttpClient<SmsMessagingProvider>();
@@ -53,6 +54,7 @@ public class MessagingPluginRegistrar : IPluginRegistrar
         services.AddScoped<IOnboardingSendService, OnboardingSendService>();
         services.AddScoped<IOnboardingRolloutService, OnboardingRolloutService>();
         services.AddScoped<ITelegramOnboardingRedemptionService, TelegramOnboardingRedemptionService>();
+        services.AddScoped<ITelegramRolloutTrigger, TelegramRolloutTrigger>();
 
         services.AddScoped<SendMessageSkill>();
         services.AddScoped<ReadMessagesSkill>();

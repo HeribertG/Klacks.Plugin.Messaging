@@ -11,6 +11,7 @@ using Klacks.Plugin.Messaging.Application.Constants;
 using Klacks.Plugin.Messaging.Application.DTOs;
 using Klacks.Plugin.Messaging.Application.Interfaces;
 using Klacks.Plugin.Messaging.Domain.Interfaces;
+using Klacks.Plugin.Messaging.Infrastructure.Services.Providers;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -51,7 +52,7 @@ public class MessagingWebhookController : ControllerBase
         var signature = Request.Headers["X-Webhook-Signature"].FirstOrDefault()
             ?? Request.Headers["X-Telegram-Bot-Api-Secret-Token"].FirstOrDefault();
 
-        if (string.Equals(providerName, TelegramOnboardingConstants.ProviderName, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(providerName, MessagingConstants.ProviderTelegram, StringComparison.OrdinalIgnoreCase))
         {
             var redeemed = await TryHandleStartCommandAsync(body, HttpContext.RequestAborted);
             if (redeemed)
@@ -101,42 +102,45 @@ public class MessagingWebhookController : ControllerBase
 
     private async Task<bool> TryHandleStartCommandAsync(string body, CancellationToken ct)
     {
+        if (!TryExtractStartCommand(body, out var token, out var chatId))
+            return false;
+
+        var result = await _redemptionService.RedeemAsync(token, chatId, ct);
+        _logger.LogInformation(
+            "Telegram onboarding redemption result {Result} for chat {ChatId}",
+            result,
+            chatId);
+        return true;
+    }
+
+    private bool TryExtractStartCommand(string body, out string token, out string chatId)
+    {
+        token = string.Empty;
+        chatId = string.Empty;
+
         try
         {
             using var doc = JsonDocument.Parse(body);
-            if (!doc.RootElement.TryGetProperty("message", out var message))
+            if (!TelegramWebhookPayload.TryGetMessageElement(doc.RootElement, out var message))
                 return false;
-            if (!message.TryGetProperty("text", out var textEl))
-                return false;
-            var text = textEl.GetString();
-            if (string.IsNullOrWhiteSpace(text))
-                return false;
+
+            var text = TelegramWebhookPayload.GetText(message);
             if (!text.StartsWith(TelegramOnboardingConstants.StartCommandPrefix, StringComparison.Ordinal))
                 return false;
 
-            var token = text[TelegramOnboardingConstants.StartCommandPrefix.Length..].Trim();
-            if (string.IsNullOrWhiteSpace(token))
+            var extractedToken = text[TelegramOnboardingConstants.StartCommandPrefix.Length..].Trim();
+            if (string.IsNullOrWhiteSpace(extractedToken))
                 return false;
 
-            if (!message.TryGetProperty("chat", out var chat))
-                return false;
-            if (!chat.TryGetProperty("id", out var chatIdEl))
-                return false;
-
-            var chatId = chatIdEl.ValueKind == JsonValueKind.Number
-                ? chatIdEl.GetInt64().ToString()
-                : chatIdEl.GetString();
-            if (string.IsNullOrWhiteSpace(chatId))
+            var extractedChatId = TelegramWebhookPayload.GetChatId(message);
+            if (string.IsNullOrWhiteSpace(extractedChatId))
                 return false;
 
-            var result = await _redemptionService.RedeemAsync(token, chatId, ct);
-            _logger.LogInformation(
-                "Telegram onboarding redemption result {Result} for chat {ChatId}",
-                result,
-                chatId);
+            token = extractedToken;
+            chatId = extractedChatId;
             return true;
         }
-        catch (Exception ex)
+        catch (JsonException ex)
         {
             _logger.LogWarning(ex, "Failed parsing Telegram /start payload");
             return false;

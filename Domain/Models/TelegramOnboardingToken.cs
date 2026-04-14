@@ -9,17 +9,12 @@
 /// <param name="ExpiresAt">UTC instant after which the token is no longer redeemable.</param>
 /// <param name="UsedAt">UTC instant of successful redemption, or null if unused.</param>
 /// <param name="RedeemedChatId">Telegram chat id recorded on redemption, for audit.</param>
-using System.ComponentModel.DataAnnotations;
-
 namespace Klacks.Plugin.Messaging.Domain.Models;
 
 public class TelegramOnboardingToken
 {
-    [Key]
     public Guid Id { get; set; }
 
-    [Required]
-    [StringLength(64)]
     public string Token { get; set; } = string.Empty;
 
     public Guid ClientId { get; set; }
@@ -30,7 +25,6 @@ public class TelegramOnboardingToken
 
     public DateTime? UsedAt { get; set; }
 
-    [StringLength(64)]
     public string? RedeemedChatId { get; set; }
 
     public bool IsDeleted { get; set; }

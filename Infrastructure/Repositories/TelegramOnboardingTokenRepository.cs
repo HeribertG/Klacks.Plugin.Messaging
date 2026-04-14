@@ -46,10 +46,4 @@ public class TelegramOnboardingTokenRepository : ITelegramOnboardingTokenReposit
         foreach (var token in active)
             token.IsDeleted = true;
     }
-
-    public Task UpdateAsync(TelegramOnboardingToken token, CancellationToken ct = default)
-    {
-        _context.Set<TelegramOnboardingToken>().Update(token);
-        return Task.CompletedTask;
-    }
 }

@@ -10,12 +10,12 @@ public static class TelegramOnboardingConstants
     public const int TokenLifetimeDays = 30;
     public const int TokenByteLength = 32;
     public const string StartCommandPrefix = "/start ";
-    public const string StartCommand = "/start";
-    public const string ProviderName = "telegram";
     public const string RolloutCompletedSettingKey = "TelegramOnboardingRolloutCompletedAt";
     public const int RolloutDelayMilliseconds = 1000;
 
     public const string InvitationSubject = "Klacks Telegram invitation";
+    public const string FallbackRecipientName = "there";
+    public const string RedeemedContactDescription = "Telegram auto-onboarding";
 
     public const string InvitationBodyTemplate =
         "Hello {0},\n\n" +

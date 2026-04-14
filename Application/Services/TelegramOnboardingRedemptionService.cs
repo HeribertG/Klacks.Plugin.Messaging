@@ -10,6 +10,7 @@
 /// <param name="logger">Logger for diagnostic output.</param>
 
 using Klacks.Plugin.Contracts;
+using Klacks.Plugin.Messaging.Application.Constants;
 using Klacks.Plugin.Messaging.Application.Interfaces;
 using Klacks.Plugin.Messaging.Domain.Enums;
 using Klacks.Plugin.Messaging.Domain.Interfaces;
@@ -56,7 +57,7 @@ public class TelegramOnboardingRedemptionService : ITelegramOnboardingRedemption
             ClientId = record.ClientId,
             Type = MessengerType.Telegram,
             Value = chatId,
-            Description = "Telegram auto-onboarding",
+            Description = TelegramOnboardingConstants.RedeemedContactDescription,
             IsDeleted = false,
             CreateTime = DateTime.UtcNow,
         };
@@ -64,7 +65,6 @@ public class TelegramOnboardingRedemptionService : ITelegramOnboardingRedemption
 
         record.UsedAt = DateTime.UtcNow;
         record.RedeemedChatId = chatId;
-        await _tokenRepository.UpdateAsync(record, ct);
 
         await _unitOfWork.CompleteAsync();
 

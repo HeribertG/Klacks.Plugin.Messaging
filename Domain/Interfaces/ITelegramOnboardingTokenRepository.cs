@@ -16,6 +16,4 @@ public interface ITelegramOnboardingTokenRepository
     Task<IReadOnlyList<TelegramOnboardingToken>> GetByClientIdAsync(Guid clientId, CancellationToken ct = default);
 
     Task InvalidateAllForClientAsync(Guid clientId, CancellationToken ct = default);
-
-    Task UpdateAsync(TelegramOnboardingToken token, CancellationToken ct = default);
 }

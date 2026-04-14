@@ -9,13 +9,14 @@
 using System.Security.Cryptography;
 using System.Text.Json;
 using Klacks.Plugin.Messaging.Application.Constants;
+using Klacks.Plugin.Messaging.Application.Interfaces;
 using Klacks.Plugin.Messaging.Domain.Interfaces;
 using Klacks.Plugin.Messaging.Domain.Models;
 using Microsoft.Extensions.Caching.Memory;
 
 namespace Klacks.Plugin.Messaging.Infrastructure.Services.Providers;
 
-public class TelegramMessagingProvider : IMessagingProviderAdapter
+public class TelegramMessagingProvider : IMessagingProviderAdapter, ITelegramBotMetadataProvider
 {
     private readonly HttpClient _httpClient;
     private readonly IMemoryCache _cache;
@@ -40,7 +41,7 @@ public class TelegramMessagingProvider : IMessagingProviderAdapter
         if (config == null || string.IsNullOrWhiteSpace(config.BotToken))
             return null;
 
-        var cacheKey = $"telegram_bot_username_{config.BotToken.GetHashCode()}";
+        var cacheKey = BuildBotUsernameCacheKey(config.BotToken);
         if (_cache.TryGetValue<string>(cacheKey, out var cached) && !string.IsNullOrEmpty(cached))
             return cached;
 
@@ -64,11 +65,22 @@ public class TelegramMessagingProvider : IMessagingProviderAdapter
             }
             return null;
         }
-        catch (Exception ex)
+        catch (HttpRequestException ex)
         {
             _logger.LogError(ex, "Failed to fetch Telegram bot username");
             return null;
         }
+        catch (JsonException ex)
+        {
+            _logger.LogError(ex, "Failed to parse Telegram bot username response");
+            return null;
+        }
+    }
+
+    private static string BuildBotUsernameCacheKey(string botToken)
+    {
+        var hashBytes = SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(botToken));
+        return $"telegram_bot_username_{Convert.ToHexString(hashBytes)}";
     }
 
     public async Task<SendMessageResult> SendAsync(SendMessageRequest request, string configJson, CancellationToken ct = default)
@@ -143,22 +155,20 @@ public class TelegramMessagingProvider : IMessagingProviderAdapter
         try
         {
             var json = JsonSerializer.Deserialize<JsonElement>(body, JsonOptions);
-
-            if (!json.TryGetProperty("message", out var message))
+            if (!TelegramWebhookPayload.TryGetMessageElement(json, out var message))
                 return null;
 
-            var messageId = message.TryGetProperty("message_id", out var mid) ? mid.ToString() : "";
-            var text = message.TryGetProperty("text", out var t) ? t.GetString() ?? "" : "";
-            var from = message.TryGetProperty("from", out var f) ? f : default;
-            var senderId = from.ValueKind != JsonValueKind.Undefined && from.TryGetProperty("id", out var sid) ? sid.ToString() : "";
-            var senderName = from.ValueKind != JsonValueKind.Undefined && from.TryGetProperty("first_name", out var fn) ? fn.GetString() ?? "" : "";
-
+            var text = TelegramWebhookPayload.GetText(message);
             if (string.IsNullOrWhiteSpace(text))
                 return null;
 
-            return new IncomingMessage(messageId, senderId, senderName, text);
+            return new IncomingMessage(
+                TelegramWebhookPayload.GetMessageId(message),
+                TelegramWebhookPayload.GetSenderId(message),
+                TelegramWebhookPayload.GetSenderFirstName(message),
+                text);
         }
-        catch (Exception)
+        catch (JsonException)
         {
             return null;
         }

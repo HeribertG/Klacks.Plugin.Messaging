@@ -49,32 +49,15 @@ public class OnboardingRolloutService : IOnboardingRolloutService
             if (ct.IsCancellationRequested)
                 break;
 
-            try
-            {
-                var result = await _sendService.SendAsync(employee.ClientId, botConfigJson, ct);
-                if (result == OnboardingSendResult.Success)
-                {
-                    sentCount++;
-                    _logger.LogInformation("Onboarding sent to client {ClientId}", employee.ClientId);
-                }
-                else
-                {
-                    _logger.LogInformation("Onboarding skipped for client {ClientId}: {Result}", employee.ClientId, result);
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Onboarding failed for client {ClientId}", employee.ClientId);
-            }
+            var result = await TrySendAsync(employee.ClientId, botConfigJson, ct);
+            if (result == OnboardingSendResult.Success)
+                sentCount++;
 
-            try
-            {
-                await Task.Delay(TelegramOnboardingConstants.RolloutDelayMilliseconds, ct);
-            }
-            catch (TaskCanceledException)
-            {
+            if (!ShouldDelayAfter(result))
+                continue;
+
+            if (!await DelayAsync(ct))
                 break;
-            }
         }
 
         await _settingsWriter.SetSettingAsync(
@@ -84,5 +67,39 @@ public class OnboardingRolloutService : IOnboardingRolloutService
 
         _logger.LogInformation("Telegram onboarding rollout complete. Sent: {Sent}/{Total}", sentCount, employees.Count);
         return sentCount;
+    }
+
+    private async Task<OnboardingSendResult?> TrySendAsync(Guid clientId, string botConfigJson, CancellationToken ct)
+    {
+        try
+        {
+            var result = await _sendService.SendAsync(clientId, botConfigJson, ct);
+            if (result == OnboardingSendResult.Success)
+                _logger.LogInformation("Onboarding sent to client {ClientId}", clientId);
+            else
+                _logger.LogInformation("Onboarding skipped for client {ClientId}: {Result}", clientId, result);
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Onboarding failed for client {ClientId}", clientId);
+            return null;
+        }
+    }
+
+    private static bool ShouldDelayAfter(OnboardingSendResult? result)
+        => result is OnboardingSendResult.Success or OnboardingSendResult.SendFailed;
+
+    private static async Task<bool> DelayAsync(CancellationToken ct)
+    {
+        try
+        {
+            await Task.Delay(TelegramOnboardingConstants.RolloutDelayMilliseconds, ct);
+            return true;
+        }
+        catch (TaskCanceledException)
+        {
+            return false;
+        }
     }
 }
