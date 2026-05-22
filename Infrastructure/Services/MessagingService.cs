@@ -307,6 +307,19 @@ public class MessagingService : IMessagingService
         return new BroadcastSendResult(broadcastId, clientIds.Count, sent, failed, skipped);
     }
 
+    public async Task<bool> RegisterWebhookAsync(Guid providerId, CancellationToken ct = default)
+    {
+        var provider = await _providerRepository.GetByIdAsync(providerId);
+        if (provider == null)
+            return false;
+
+        var adapter = _adapterFactory.Create(provider.ProviderType);
+        if (adapter is not IWebhookRegistrar registrar)
+            return true;
+
+        return await registrar.RegisterWebhookAsync(provider.ConfigJson, provider.WebhookSecret, ct);
+    }
+
     private async Task<MessagingProvider?> ResolveProviderAsync(string nameOrType)
     {
         var byName = await _providerRepository.GetByNameAsync(nameOrType);

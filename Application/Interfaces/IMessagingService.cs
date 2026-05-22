@@ -13,7 +13,7 @@
 /// <param name="offset">Number of messages to skip</param>
 /// <param name="body">Raw webhook request body</param>
 /// <param name="signature">Webhook signature header</param>
-/// <param name="providerId">Unique identifier of the provider to test</param>
+/// <param name="providerId">Unique identifier of the provider to test or register webhook for</param>
 using Klacks.Plugin.Messaging.Domain.Enums;
 using Klacks.Plugin.Messaging.Domain.Models;
 
@@ -34,4 +34,6 @@ public interface IMessagingService
     Task<BroadcastPreview> PreviewBroadcastAsync(string providerName, Guid groupId, CancellationToken ct = default);
 
     Task<BroadcastSendResult> SendBroadcastAsync(string providerName, Guid groupId, string content, string contentType = "text", CancellationToken ct = default);
+
+    Task<bool> RegisterWebhookAsync(Guid providerId, CancellationToken ct = default);
 }

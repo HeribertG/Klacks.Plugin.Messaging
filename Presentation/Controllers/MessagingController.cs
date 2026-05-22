@@ -79,6 +79,8 @@ public class MessagingController : ControllerBase
         await _providerRepository.AddAsync(provider);
         await _unitOfWork.CompleteAsync();
 
+        await _messagingService.RegisterWebhookAsync(provider.Id);
+
         return CreatedAtAction(nameof(GetProvider), new { id = provider.Id }, ToDto(provider));
     }
 
@@ -98,6 +100,8 @@ public class MessagingController : ControllerBase
         provider.UpdatedAt = DateTime.UtcNow;
 
         await _unitOfWork.CompleteAsync();
+
+        await _messagingService.RegisterWebhookAsync(provider.Id);
 
         var isNowTelegramEnabled = IsTelegramEnabled(dto.ProviderType, dto.IsEnabled);
         await _rolloutTrigger.TriggerIfNewlyEnabledAsync(wasTelegramEnabled, isNowTelegramEnabled, provider.ConfigJson);

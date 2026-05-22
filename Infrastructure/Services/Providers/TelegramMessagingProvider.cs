@@ -16,7 +16,7 @@ using Microsoft.Extensions.Caching.Memory;
 
 namespace Klacks.Plugin.Messaging.Infrastructure.Services.Providers;
 
-public class TelegramMessagingProvider : IMessagingProviderAdapter, ITelegramBotMetadataProvider
+public class TelegramMessagingProvider : IMessagingProviderAdapter, ITelegramBotMetadataProvider, IWebhookRegistrar
 {
     private readonly HttpClient _httpClient;
     private readonly IMemoryCache _cache;
@@ -171,6 +171,37 @@ public class TelegramMessagingProvider : IMessagingProviderAdapter, ITelegramBot
         catch (JsonException)
         {
             return null;
+        }
+    }
+
+    public async Task<bool> RegisterWebhookAsync(string configJson, string webhookSecret, CancellationToken ct = default)
+    {
+        var config = JsonSerializer.Deserialize<TelegramConfig>(configJson, JsonOptions);
+        if (config == null || string.IsNullOrWhiteSpace(config.BotToken) || string.IsNullOrWhiteSpace(config.WebhookUrl))
+            return false;
+
+        var url = $"https://api.telegram.org/bot{config.BotToken}/setWebhook";
+        var payload = new { url = config.WebhookUrl, secret_token = webhookSecret };
+        var content = new StringContent(JsonSerializer.Serialize(payload), System.Text.Encoding.UTF8, "application/json");
+
+        try
+        {
+            var response = await _httpClient.PostAsync(url, content, ct);
+            var body = await response.Content.ReadAsStringAsync(ct);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("Telegram setWebhook failed: {StatusCode} - {Body}", response.StatusCode, body);
+                return false;
+            }
+
+            _logger.LogInformation("Telegram webhook registered at {WebhookUrl}", config.WebhookUrl);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to register Telegram webhook");
+            return false;
         }
     }
 
