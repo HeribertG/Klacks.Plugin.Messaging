@@ -35,5 +35,9 @@ public interface IMessagingService
 
     Task<BroadcastSendResult> SendBroadcastAsync(string providerName, Guid groupId, string content, string contentType = "text", CancellationToken ct = default);
 
+    Task<BroadcastPreview> PreviewBroadcastToIdNumbersAsync(string providerName, IReadOnlyCollection<int> idNumbers, CancellationToken ct = default);
+
+    Task<BroadcastSendResult> SendBroadcastToIdNumbersAsync(string providerName, IReadOnlyCollection<int> idNumbers, string content, string contentType = "text", CancellationToken ct = default);
+
     Task<bool> RegisterWebhookAsync(Guid providerId, CancellationToken ct = default);
 }

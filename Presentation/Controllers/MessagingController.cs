@@ -200,6 +200,52 @@ public class MessagingController : ControllerBase
         }
     }
 
+    [HttpGet("broadcast/preview-by-id-numbers")]
+    public async Task<ActionResult<BroadcastPreview>> PreviewBroadcastToIdNumbers(
+        [FromQuery] string provider,
+        [FromQuery] int[] idNumbers)
+    {
+        if (string.IsNullOrWhiteSpace(provider))
+            return BadRequest(new { error = "provider is required" });
+
+        if (idNumbers.Length == 0)
+            return BadRequest(new { error = "idNumbers is required" });
+
+        try
+        {
+            var preview = await _messagingService.PreviewBroadcastToIdNumbersAsync(provider, idNumbers);
+            return Ok(preview);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    [HttpPost("broadcast/send-to-id-numbers")]
+    public async Task<ActionResult<BroadcastSendResult>> SendBroadcastToIdNumbers([FromBody] SendBroadcastToIdNumbersDto dto)
+    {
+        if (string.IsNullOrWhiteSpace(dto.Provider))
+            return BadRequest(new { error = "provider is required" });
+
+        if (dto.IdNumbers.Length == 0)
+            return BadRequest(new { error = "idNumbers is required" });
+
+        if (string.IsNullOrWhiteSpace(dto.Content))
+            return BadRequest(new { error = "content is required" });
+
+        try
+        {
+            var result = await _messagingService.SendBroadcastToIdNumbersAsync(
+                dto.Provider, dto.IdNumbers, dto.Content, dto.ContentType ?? "text");
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
     private static MessagingProviderDto ToDto(MessagingProvider p) => new()
     {
         Id = p.Id,
