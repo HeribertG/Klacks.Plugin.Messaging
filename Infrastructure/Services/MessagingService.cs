@@ -102,7 +102,7 @@ public class MessagingService : IMessagingService
         return await _messageRepository.GetMessagesAsync(providerId, direction, sender, count, offset);
     }
 
-    public async Task<Message> ProcessIncomingMessageAsync(string providerName, string body, string? signature, CancellationToken ct = default)
+    public async Task<WebhookProcessingResult> ProcessIncomingMessageAsync(string providerName, string body, IReadOnlyDictionary<string, string> headers, CancellationToken ct = default)
     {
         var provider = await ResolveProviderAsync(providerName);
         if (provider == null)
@@ -110,13 +110,20 @@ public class MessagingService : IMessagingService
 
         var adapter = _adapterFactory.Create(provider.ProviderType);
 
-        var validationResult = adapter.ValidateWebhook(body, signature ?? string.Empty, provider.WebhookSecret);
+        var context = new WebhookValidationContext(body, headers, provider.ConfigJson, provider.WebhookSecret);
+        var validationResult = adapter.ValidateWebhook(context);
         if (!validationResult.IsValid)
             throw new UnauthorizedAccessException($"Webhook validation failed for provider '{providerName}'");
 
+        if (validationResult.ChallengeResponse != null)
+            return new WebhookProcessingResult(ChallengeResponse: validationResult.ChallengeResponse);
+
         var incoming = adapter.ParseWebhookPayload(body);
         if (incoming == null)
-            throw new InvalidOperationException($"Failed to parse webhook payload for provider '{providerName}'");
+        {
+            _logger.LogDebug("Webhook payload for provider {Provider} contained no processable message", providerName);
+            return new WebhookProcessingResult();
+        }
 
         Guid? clientId = null;
         if (Enum.TryParse<MessengerType>(provider.ProviderType, ignoreCase: true, out var messengerType))
@@ -150,7 +157,20 @@ public class MessagingService : IMessagingService
 
         _logger.LogInformation("Processed incoming message {MessageId} from provider {Provider}", message.Id, providerName);
 
-        return message;
+        return new WebhookProcessingResult(message);
+    }
+
+    public async Task<string?> VerifySubscriptionChallengeAsync(string providerName, string? verifyToken, string challenge, CancellationToken ct = default)
+    {
+        var provider = await ResolveProviderAsync(providerName);
+        if (provider == null)
+            return null;
+
+        var adapter = _adapterFactory.Create(provider.ProviderType);
+        if (adapter is not IWebhookSubscriptionVerifier verifier)
+            return null;
+
+        return verifier.VerifySubscription(provider.ConfigJson, verifyToken ?? string.Empty) ? challenge : null;
     }
 
     public async Task<bool> TestProviderAsync(Guid providerId, CancellationToken ct = default)

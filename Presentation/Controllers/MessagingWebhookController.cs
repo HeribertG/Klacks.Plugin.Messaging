@@ -23,6 +23,8 @@ namespace Klacks.Plugin.Messaging.Presentation.Controllers;
 [RequireFeaturePlugin(MessagingConstants.PluginName)]
 public class MessagingWebhookController : ControllerBase
 {
+    private const int MaxChallengeLength = 256;
+
     private readonly IMessagingService _messagingService;
     private readonly IMessagingProviderRepository _providerRepository;
     private readonly IPluginEventBus _eventBus;
@@ -49,8 +51,10 @@ public class MessagingWebhookController : ControllerBase
     {
         using var reader = new StreamReader(Request.Body);
         var body = await reader.ReadToEndAsync();
-        var signature = Request.Headers["X-Webhook-Signature"].FirstOrDefault()
-            ?? Request.Headers["X-Telegram-Bot-Api-Secret-Token"].FirstOrDefault();
+        var headers = Request.Headers.ToDictionary(
+            h => h.Key,
+            h => h.Value.ToString(),
+            StringComparer.OrdinalIgnoreCase);
 
         if (string.Equals(providerName, MessagingConstants.ProviderTelegram, StringComparison.OrdinalIgnoreCase))
         {
@@ -61,7 +65,15 @@ public class MessagingWebhookController : ControllerBase
 
         try
         {
-            var message = await _messagingService.ProcessIncomingMessageAsync(providerName, body, signature);
+            var result = await _messagingService.ProcessIncomingMessageAsync(providerName, body, headers);
+
+            if (result.ChallengeResponse != null)
+                return Content(result.ChallengeResponse, "text/plain");
+
+            if (result.Message == null)
+                return Ok();
+
+            var message = result.Message;
             var provider = await _providerRepository.GetByNameAsync(providerName);
 
             var notification = new IncomingMessageDto
@@ -92,12 +104,19 @@ public class MessagingWebhookController : ControllerBase
     }
 
     [HttpGet("{providerName}")]
-    public IActionResult VerifyWebhook(string providerName, [FromQuery(Name = "hub.challenge")] string? challenge = null)
+    public async Task<IActionResult> VerifyWebhook(
+        string providerName,
+        [FromQuery(Name = "hub.challenge")] string? challenge = null,
+        [FromQuery(Name = "hub.verify_token")] string? verifyToken = null)
     {
-        if (!string.IsNullOrEmpty(challenge) && challenge.Length <= 256)
-            return Ok(challenge);
+        if (string.IsNullOrEmpty(challenge) || challenge.Length > MaxChallengeLength)
+            return Ok("Webhook endpoint active");
 
-        return Ok("Webhook endpoint active");
+        var response = await _messagingService.VerifySubscriptionChallengeAsync(providerName, verifyToken, challenge);
+        if (response == null)
+            return Forbid();
+
+        return Ok(response);
     }
 
     private async Task<bool> TryHandleStartCommandAsync(string body, CancellationToken ct)

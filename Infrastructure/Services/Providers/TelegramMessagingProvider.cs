@@ -22,6 +22,8 @@ public class TelegramMessagingProvider : IMessagingProviderAdapter, ITelegramBot
     private readonly IMemoryCache _cache;
     private readonly ILogger<TelegramMessagingProvider> _logger;
 
+    private const string SecretTokenHeader = "X-Telegram-Bot-Api-Secret-Token";
+
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
     public string ProviderType => MessagingConstants.ProviderTelegram;
@@ -139,15 +141,17 @@ public class TelegramMessagingProvider : IMessagingProviderAdapter, ITelegramBot
         }
     }
 
-    public WebhookValidationResult ValidateWebhook(string body, string signature, string webhookSecret)
+    public WebhookValidationResult ValidateWebhook(WebhookValidationContext context)
     {
-        if (string.IsNullOrWhiteSpace(webhookSecret))
+        if (string.IsNullOrWhiteSpace(context.WebhookSecret))
             return new WebhookValidationResult(true);
+
+        var signature = context.GetHeader(SecretTokenHeader) ?? string.Empty;
 
         return new WebhookValidationResult(
             CryptographicOperations.FixedTimeEquals(
                 System.Text.Encoding.UTF8.GetBytes(signature),
-                System.Text.Encoding.UTF8.GetBytes(webhookSecret)));
+                System.Text.Encoding.UTF8.GetBytes(context.WebhookSecret)));
     }
 
     public IncomingMessage? ParseWebhookPayload(string body)

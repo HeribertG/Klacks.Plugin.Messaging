@@ -38,7 +38,7 @@ public class ViberMessagingProvider : IMessagingProviderAdapter
         return Task.FromResult(false);
     }
 
-    public WebhookValidationResult ValidateWebhook(string body, string signature, string webhookSecret)
+    public WebhookValidationResult ValidateWebhook(WebhookValidationContext context)
     {
         return new WebhookValidationResult(false);
     }

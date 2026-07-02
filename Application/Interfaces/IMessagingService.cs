@@ -6,13 +6,14 @@
 /// <param name="providerName">Internal name of the messaging provider</param>
 /// <param name="request">The outbound message to send</param>
 /// <param name="id">Unique identifier of the message</param>
-/// <param name="providerId">Optional filter by provider</param>
 /// <param name="direction">Optional filter by message direction</param>
 /// <param name="sender">Optional filter by sender address</param>
 /// <param name="count">Number of messages to return</param>
 /// <param name="offset">Number of messages to skip</param>
 /// <param name="body">Raw webhook request body</param>
-/// <param name="signature">Webhook signature header</param>
+/// <param name="headers">HTTP request headers of the webhook call</param>
+/// <param name="verifyToken">Verify token sent by the external platform during subscription</param>
+/// <param name="challenge">Challenge string to echo back on successful subscription verification</param>
 /// <param name="providerId">Unique identifier of the provider to test or register webhook for</param>
 using Klacks.Plugin.Messaging.Domain.Enums;
 using Klacks.Plugin.Messaging.Domain.Models;
@@ -27,7 +28,9 @@ public interface IMessagingService
 
     Task<IReadOnlyList<Message>> GetMessagesAsync(Guid? providerId, MessageDirection? direction, string? sender, int count = 20, int offset = 0, CancellationToken ct = default);
 
-    Task<Message> ProcessIncomingMessageAsync(string providerName, string body, string? signature, CancellationToken ct = default);
+    Task<WebhookProcessingResult> ProcessIncomingMessageAsync(string providerName, string body, IReadOnlyDictionary<string, string> headers, CancellationToken ct = default);
+
+    Task<string?> VerifySubscriptionChallengeAsync(string providerName, string? verifyToken, string challenge, CancellationToken ct = default);
 
     Task<bool> TestProviderAsync(Guid providerId, CancellationToken ct = default);
 
