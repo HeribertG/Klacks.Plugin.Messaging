@@ -19,7 +19,7 @@ public interface IMessagingProviderAdapter
 
     /// <summary>
     /// Indicates whether this provider accepts a plain mobile phone number as recipient.
-    /// True for WhatsApp, Signal, SMS, Viber. False for Telegram, Threema, LINE, KakaoTalk,
+    /// True for WhatsApp, Signal and SMS. False for Telegram, Threema, Viber, LINE, KakaoTalk,
     /// WeChat, Zalo, Microsoft Teams, Slack where an explicit external identifier is required.
     /// Used by the broadcast flow to fall back to Client.Communication when no MessengerContact
     /// exists for the target client.
