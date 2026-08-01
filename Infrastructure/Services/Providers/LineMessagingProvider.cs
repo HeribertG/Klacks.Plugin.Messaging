@@ -83,7 +83,7 @@ public class LineMessagingProvider : IMessagingProviderAdapter
                 var errorMessage = string.IsNullOrWhiteSpace(errorDetail)
                     ? $"LINE API error: {response.StatusCode}"
                     : $"LINE API error: {response.StatusCode} - {errorDetail}";
-                return new SendMessageResult(false, ErrorMessage: errorMessage);
+                return new SendMessageResult(false, ErrorMessage: errorMessage, IsThrottled: response.IsThrottled());
             }
 
             var messageId = ExtractSentMessageId(responseBody);

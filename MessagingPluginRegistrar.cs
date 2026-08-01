@@ -10,6 +10,7 @@ using Klacks.Plugin.Contracts;
 using Klacks.Plugin.Messaging.Application.Constants;
 using Klacks.Plugin.Messaging.Application.Interfaces;
 using Klacks.Plugin.Messaging.Domain.Interfaces;
+using Klacks.Plugin.Messaging.Infrastructure.Http;
 using Klacks.Plugin.Messaging.Infrastructure.Persistence.Configurations;
 using Klacks.Plugin.Messaging.Infrastructure.Repositories;
 using Klacks.Plugin.Messaging.Application.Services;
@@ -37,19 +38,21 @@ public class MessagingPluginRegistrar : IPluginRegistrar
         services.AddScoped<IMessagingService, MessagingService>();
         services.AddScoped<MessagingProviderAdapterFactory>();
 
-        services.AddHttpClient<TelegramMessagingProvider>();
+        services.AddTransient<RateLimitRetryHandler>();
+
+        AddProviderHttpClient<TelegramMessagingProvider>(services);
         services.AddScoped<ITelegramBotMetadataProvider>(sp => sp.GetRequiredService<TelegramMessagingProvider>());
-        services.AddHttpClient<WhatsAppMessagingProvider>();
-        services.AddHttpClient<SignalMessagingProvider>();
-        services.AddHttpClient<SmsMessagingProvider>();
-        services.AddHttpClient<ThreemaMessagingProvider>();
-        services.AddHttpClient<ViberMessagingProvider>();
-        services.AddHttpClient<LineMessagingProvider>();
-        services.AddHttpClient<KakaoTalkMessagingProvider>();
-        services.AddHttpClient<WeChatMessagingProvider>();
-        services.AddHttpClient<ZaloMessagingProvider>();
-        services.AddHttpClient<TeamsMessagingProvider>();
-        services.AddHttpClient<SlackMessagingProvider>();
+        AddProviderHttpClient<WhatsAppMessagingProvider>(services);
+        AddProviderHttpClient<SignalMessagingProvider>(services);
+        AddProviderHttpClient<SmsMessagingProvider>(services);
+        AddProviderHttpClient<ThreemaMessagingProvider>(services);
+        AddProviderHttpClient<ViberMessagingProvider>(services);
+        AddProviderHttpClient<LineMessagingProvider>(services);
+        AddProviderHttpClient<KakaoTalkMessagingProvider>(services);
+        AddProviderHttpClient<WeChatMessagingProvider>(services);
+        AddProviderHttpClient<ZaloMessagingProvider>(services);
+        AddProviderHttpClient<TeamsMessagingProvider>(services);
+        AddProviderHttpClient<SlackMessagingProvider>(services);
 
         services.AddScoped<IOnboardingSendService, OnboardingSendService>();
         services.AddScoped<IOnboardingRolloutService, OnboardingRolloutService>();
@@ -84,5 +87,11 @@ public class MessagingPluginRegistrar : IPluginRegistrar
     public IEnumerable<Assembly> GetSkillAssemblies()
     {
         yield return typeof(MessagingPluginRegistrar).Assembly;
+    }
+
+    private static void AddProviderHttpClient<TProvider>(IServiceCollection services)
+        where TProvider : class
+    {
+        services.AddHttpClient<TProvider>().AddHttpMessageHandler<RateLimitRetryHandler>();
     }
 }

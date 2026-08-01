@@ -63,7 +63,7 @@ public class SignalMessagingProvider : IMessagingProviderAdapter
             if (!response.IsSuccessStatusCode)
             {
                 _logger.LogWarning("Signal API error: {StatusCode} - {Body}", response.StatusCode, responseBody);
-                return new SendMessageResult(false, ErrorMessage: BuildErrorMessage(response.StatusCode, responseBody));
+                return new SendMessageResult(false, ErrorMessage: BuildErrorMessage(response.StatusCode, responseBody), IsThrottled: response.IsThrottled());
             }
 
             return new SendMessageResult(true, ExternalMessageId: ExtractTimestamp(responseBody));

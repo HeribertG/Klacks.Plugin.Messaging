@@ -98,7 +98,7 @@ public class WhatsAppMessagingProvider : IMessagingProviderAdapter, IWebhookSubs
                 var errorMessage = string.IsNullOrWhiteSpace(errorDetail)
                     ? $"WhatsApp API error: {response.StatusCode}"
                     : $"WhatsApp API error: {response.StatusCode} - {errorDetail}";
-                return new SendMessageResult(false, ErrorMessage: errorMessage);
+                return new SendMessageResult(false, ErrorMessage: errorMessage, IsThrottled: response.IsThrottled());
             }
 
             var messageId = ExtractMessageId(responseBody);

@@ -106,7 +106,7 @@ public class TelegramMessagingProvider : IMessagingProviderAdapter, ITelegramBot
             if (!response.IsSuccessStatusCode)
             {
                 _logger.LogWarning("Telegram API error: {StatusCode} - {Body}", response.StatusCode, responseBody);
-                return new SendMessageResult(false, ErrorMessage: $"Telegram API error: {response.StatusCode}");
+                return new SendMessageResult(false, ErrorMessage: $"Telegram API error: {response.StatusCode}", IsThrottled: response.IsThrottled());
             }
 
             var result = JsonSerializer.Deserialize<JsonElement>(responseBody);

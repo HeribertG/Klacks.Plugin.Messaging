@@ -85,7 +85,7 @@ public class TeamsMessagingProvider : IMessagingProviderAdapter
             {
                 var responseBody = await response.Content.ReadAsStringAsync(ct);
                 _logger.LogWarning("Microsoft Teams webhook error: {StatusCode} - {Body}", response.StatusCode, responseBody);
-                return new SendMessageResult(false, ErrorMessage: $"Microsoft Teams webhook error: {response.StatusCode}");
+                return new SendMessageResult(false, ErrorMessage: $"Microsoft Teams webhook error: {response.StatusCode}", IsThrottled: response.IsThrottled());
             }
 
             return new SendMessageResult(true);

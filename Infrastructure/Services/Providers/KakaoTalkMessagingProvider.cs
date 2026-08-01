@@ -79,7 +79,7 @@ public class KakaoTalkMessagingProvider : IMessagingProviderAdapter
             if (!response.IsSuccessStatusCode)
             {
                 _logger.LogWarning("KakaoTalk API error: {StatusCode} - {Body}", response.StatusCode, responseBody);
-                return new SendMessageResult(false, ErrorMessage: BuildHttpErrorMessage(response.StatusCode, responseBody));
+                return new SendMessageResult(false, ErrorMessage: BuildHttpErrorMessage(response.StatusCode, responseBody), IsThrottled: response.IsThrottled());
             }
 
             return EvaluateSendResponse(request.Recipient, responseBody);

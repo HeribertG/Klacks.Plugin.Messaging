@@ -84,7 +84,7 @@ public class ViberMessagingProvider : IMessagingProviderAdapter, IWebhookRegistr
             if (!response.IsSuccessStatusCode)
             {
                 _logger.LogWarning("Viber API error: {StatusCode} - {Body}", response.StatusCode, responseBody);
-                return new SendMessageResult(false, ErrorMessage: $"Viber API error: {response.StatusCode}");
+                return new SendMessageResult(false, ErrorMessage: $"Viber API error: {response.StatusCode}", IsThrottled: response.IsThrottled());
             }
 
             var result = JsonSerializer.Deserialize<JsonElement>(responseBody, JsonOptions);

@@ -73,7 +73,7 @@ public class SmsMessagingProvider : IMessagingProviderAdapter
             if (!response.IsSuccessStatusCode)
             {
                 _logger.LogWarning("SMS gateway error: {StatusCode} - {Body}", response.StatusCode, responseBody);
-                return new SendMessageResult(false, ErrorMessage: BuildErrorMessage(response.StatusCode, responseBody));
+                return new SendMessageResult(false, ErrorMessage: BuildErrorMessage(response.StatusCode, responseBody), IsThrottled: response.IsThrottled());
             }
 
             return new SendMessageResult(true, ExternalMessageId: ExtractJsonStringProperty(responseBody, SidPropertyName));

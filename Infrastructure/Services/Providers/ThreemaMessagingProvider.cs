@@ -71,7 +71,7 @@ public class ThreemaMessagingProvider : IMessagingProviderAdapter
             if (!response.IsSuccessStatusCode)
             {
                 _logger.LogWarning("Threema gateway error: {StatusCode} - {Body}", response.StatusCode, responseBody);
-                return new SendMessageResult(false, ErrorMessage: MapErrorMessage(response.StatusCode));
+                return new SendMessageResult(false, ErrorMessage: MapErrorMessage(response.StatusCode), IsThrottled: response.IsThrottled());
             }
 
             var messageId = responseBody.Trim();

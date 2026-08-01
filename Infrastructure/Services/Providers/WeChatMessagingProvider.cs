@@ -83,7 +83,7 @@ public class WeChatMessagingProvider : IMessagingProviderAdapter
             if (!response.IsSuccessStatusCode)
             {
                 _logger.LogWarning("WeChat API error: {StatusCode} - {Body}", response.StatusCode, responseBody);
-                return new SendMessageResult(false, ErrorMessage: $"WeChat API error: {response.StatusCode}");
+                return new SendMessageResult(false, ErrorMessage: $"WeChat API error: {response.StatusCode}", IsThrottled: response.IsThrottled());
             }
 
             var result = JsonSerializer.Deserialize<JsonElement>(responseBody, JsonOptions);
