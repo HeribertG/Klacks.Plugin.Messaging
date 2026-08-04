@@ -7,6 +7,7 @@
 /// </summary>
 /// <param name="httpClient">HTTP client for Slack Web API requests</param>
 /// <param name="logger">Logger instance</param>
+using System.Globalization;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
@@ -17,13 +18,17 @@ using Klacks.Plugin.Messaging.Domain.Models;
 
 namespace Klacks.Plugin.Messaging.Infrastructure.Services.Providers;
 
-public class SlackMessagingProvider : IMessagingProviderAdapter
+public class SlackMessagingProvider : IMessagingProviderAdapter, IInboundMessagePoller
 {
     private readonly HttpClient _httpClient;
     private readonly ILogger<SlackMessagingProvider> _logger;
 
     private const string PostMessageUrl = "https://slack.com/api/chat.postMessage";
     private const string AuthTestUrl = "https://slack.com/api/auth.test";
+    private const string ConversationsHistoryUrl = "https://slack.com/api/conversations.history";
+    private const string MessagesProperty = "messages";
+    private const int MaxMessagesPerPoll = 100;
+    private const char ChannelNamePrefix = '#';
     private const string BearerScheme = "Bearer";
     private const string JsonContentType = "application/json";
     private const string SignatureHeader = "X-Slack-Signature";
@@ -228,6 +233,135 @@ public class SlackMessagingProvider : IMessagingProviderAdapter
         }
     }
 
+    public async Task<InboundPollResult> PollAsync(string configJson, string? cursor, CancellationToken ct = default)
+    {
+        var config = DeserializeConfig(configJson);
+        var channelId = ResolveChannelId(config);
+        if (config == null || string.IsNullOrWhiteSpace(config.BotToken) || channelId == null)
+        {
+            return new InboundPollResult([], cursor);
+        }
+
+        // First ever round: anchor at now instead of replaying the whole channel history as if
+        // it had just arrived. Slack timestamps are Unix seconds with a microsecond suffix.
+        if (string.IsNullOrWhiteSpace(cursor))
+        {
+            return new InboundPollResult([], FormatCursor(DateTimeOffset.UtcNow));
+        }
+
+        var url = $"{ConversationsHistoryUrl}?channel={Uri.EscapeDataString(channelId)}"
+            + $"&oldest={Uri.EscapeDataString(cursor)}&inclusive=false&limit={MaxMessagesPerPoll}";
+
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Get, url);
+        httpRequest.Headers.Authorization = new AuthenticationHeaderValue(BearerScheme, config.BotToken);
+
+        try
+        {
+            var response = await _httpClient.SendAsync(httpRequest, ct);
+            var responseBody = await response.Content.ReadAsStringAsync(ct);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("Slack conversations.history HTTP {StatusCode}", response.StatusCode);
+                return new InboundPollResult([], cursor);
+            }
+
+            var result = JsonSerializer.Deserialize<JsonElement>(responseBody, JsonOptions);
+            if (!result.TryGetProperty(OkProperty, out var ok) || ok.ValueKind != JsonValueKind.True)
+            {
+                _logger.LogWarning(
+                    "Slack conversations.history failed: {Error}", GetStringProperty(result, ErrorProperty) ?? ErrorUnknown);
+                return new InboundPollResult([], cursor);
+            }
+
+            return BuildPollResult(result, cursor);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException or TaskCanceledException)
+        {
+            _logger.LogWarning(ex, "Slack polling round failed");
+            return new InboundPollResult([], cursor);
+        }
+    }
+
+    private InboundPollResult BuildPollResult(JsonElement result, string? cursor)
+    {
+        if (!result.TryGetProperty(MessagesProperty, out var messages) || messages.ValueKind != JsonValueKind.Array)
+        {
+            return new InboundPollResult([], cursor);
+        }
+
+        var collected = new List<IncomingMessage>();
+        var highestCursor = cursor;
+
+        // Slack returns newest first; the bridge downstream expects oldest first.
+        foreach (var element in messages.EnumerateArray().Reverse())
+        {
+            var timestamp = GetStringProperty(element, TimestampProperty);
+            if (string.IsNullOrWhiteSpace(timestamp))
+            {
+                continue;
+            }
+
+            if (IsNewerCursor(timestamp, highestCursor))
+            {
+                highestCursor = timestamp;
+            }
+
+            // Same guard as ParseWebhookPayload: anything carrying bot_id or a subtype is either
+            // our own reply coming back or not a plain user message.
+            if (element.TryGetProperty(BotIdProperty, out _) || element.TryGetProperty(SubtypeProperty, out _))
+            {
+                continue;
+            }
+
+            var user = GetStringProperty(element, UserProperty);
+            var text = GetStringProperty(element, TextProperty);
+            if (string.IsNullOrWhiteSpace(user) || string.IsNullOrWhiteSpace(text))
+            {
+                continue;
+            }
+
+            collected.Add(new IncomingMessage(timestamp, user, user, text));
+        }
+
+        return new InboundPollResult(collected, highestCursor);
+    }
+
+    private static string? ResolveChannelId(SlackConfig? config)
+    {
+        if (config == null)
+        {
+            return null;
+        }
+
+        if (!string.IsNullOrWhiteSpace(config.ChannelId))
+        {
+            return config.ChannelId.Trim();
+        }
+
+        // conversations.history only accepts an ID. A '#name' in DefaultChannel would need
+        // channels:read to resolve, which the send-only scope set does not include.
+        var fallback = config.DefaultChannel.Trim();
+        return fallback.Length > 0 && fallback[0] != ChannelNamePrefix ? fallback : null;
+    }
+
+    private static string FormatCursor(DateTimeOffset moment)
+    {
+        return $"{moment.ToUnixTimeSeconds()}.000000";
+    }
+
+    private static bool IsNewerCursor(string candidate, string? current)
+    {
+        if (string.IsNullOrWhiteSpace(current))
+        {
+            return true;
+        }
+
+        return decimal.TryParse(candidate, NumberStyles.Number, CultureInfo.InvariantCulture, out var candidateValue)
+            && decimal.TryParse(current, NumberStyles.Number, CultureInfo.InvariantCulture, out var currentValue)
+            && candidateValue > currentValue;
+    }
+
     private static string? GetStringProperty(JsonElement element, string name)
     {
         return element.TryGetProperty(name, out var property) && property.ValueKind == JsonValueKind.String
@@ -253,5 +387,6 @@ public class SlackMessagingProvider : IMessagingProviderAdapter
         public string SigningSecret { get; init; } = string.Empty;
         public string DefaultChannel { get; init; } = string.Empty;
         public string WebhookUrl { get; init; } = string.Empty;
+        public string ChannelId { get; init; } = string.Empty;
     }
 }

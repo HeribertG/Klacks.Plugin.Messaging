@@ -36,4 +36,19 @@ public static class MessagingConstants
 
     public const string SettingTelegramBotUsername = "TELEGRAM_BOT_USERNAME";
     public const int BotUsernameCacheMinutes = 1440;
+
+    /// <summary>
+    /// Event type broadcast on the plugin event bus whenever an inbound message was stored.
+    /// </summary>
+    public const string IncomingMessageEventType = "messaging.incoming";
+
+    /// <summary>
+    /// Seconds between polling rounds for providers that cannot deliver through a webhook.
+    /// </summary>
+    public const int InboundPollIntervalSeconds = 10;
+
+    /// <summary>
+    /// Settings key prefix holding the per-provider polling cursor; the provider name is appended.
+    /// </summary>
+    public const string InboundPollCursorSettingPrefix = "MESSAGING_POLL_CURSOR_";
 }

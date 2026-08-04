@@ -9,6 +9,7 @@ using Klacks.Plugin.Contracts.Filters;
 using Klacks.Plugin.Messaging.Application.Constants;
 using Klacks.Plugin.Messaging.Application.DTOs;
 using Klacks.Plugin.Messaging.Application.Interfaces;
+using Klacks.Plugin.Messaging.Application.Services;
 using Klacks.Plugin.Messaging.Domain.Enums;
 using Klacks.Plugin.Messaging.Domain.Interfaces;
 using Klacks.Plugin.Messaging.Domain.Models;
@@ -91,12 +92,17 @@ public class MessagingController : ControllerBase
         var provider = await _providerRepository.GetByIdAsync(id);
         if (provider == null) return NotFound();
 
+        if (!MessagingProviderConfigMerger.TryMerge(provider.ConfigJson, dto.ConfigJson, out var mergedConfig))
+        {
+            return BadRequest("ConfigJson must be a JSON object.");
+        }
+
         var wasTelegramEnabled = IsTelegramEnabled(provider.ProviderType, provider.IsEnabled);
 
         provider.DisplayName = dto.DisplayName;
         provider.ProviderType = dto.ProviderType;
         provider.IsEnabled = dto.IsEnabled;
-        provider.ConfigJson = dto.ConfigJson;
+        provider.ConfigJson = mergedConfig;
         provider.UpdatedAt = DateTime.UtcNow;
 
         await _unitOfWork.CompleteAsync();

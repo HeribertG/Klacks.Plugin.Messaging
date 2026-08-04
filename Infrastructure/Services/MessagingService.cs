@@ -129,6 +129,33 @@ public class MessagingService : IMessagingService
             return new WebhookProcessingResult();
         }
 
+        var message = await PersistInboundAsync(provider, incoming, ct);
+        return message == null ? new WebhookProcessingResult() : new WebhookProcessingResult(message);
+    }
+
+    public async Task<Message?> IngestInboundMessageAsync(string providerName, IncomingMessage incoming, CancellationToken ct = default)
+    {
+        var provider = await ResolveProviderAsync(providerName);
+        if (provider == null)
+        {
+            _logger.LogWarning("Cannot ingest inbound message: provider '{Provider}' not found", providerName);
+            return null;
+        }
+
+        return await PersistInboundAsync(provider, incoming, ct);
+    }
+
+    private async Task<Message?> PersistInboundAsync(MessagingProvider provider, IncomingMessage incoming, CancellationToken ct)
+    {
+        if (await _messageRepository.InboundExistsAsync(provider.Id, incoming.ExternalMessageId, ct))
+        {
+            _logger.LogDebug(
+                "Skipping already stored inbound message {ExternalId} from provider {Provider}",
+                incoming.ExternalMessageId,
+                provider.Name);
+            return null;
+        }
+
         Guid? clientId = null;
         if (Enum.TryParse<MessengerType>(provider.ProviderType, ignoreCase: true, out var messengerType))
         {
@@ -159,9 +186,9 @@ public class MessagingService : IMessagingService
         await _messageRepository.AddAsync(message);
         await _unitOfWork.CompleteAsync();
 
-        _logger.LogInformation("Processed incoming message {MessageId} from provider {Provider}", message.Id, providerName);
+        _logger.LogInformation("Processed incoming message {MessageId} from provider {Provider}", message.Id, provider.Name);
 
-        return new WebhookProcessingResult(message);
+        return message;
     }
 
     public async Task<string?> VerifySubscriptionChallengeAsync(string providerName, string? verifyToken, string challenge, CancellationToken ct = default)

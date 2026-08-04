@@ -88,7 +88,7 @@ public class MessagingWebhookController : ControllerBase
                 Timestamp = message.Timestamp
             };
 
-            await _eventBus.BroadcastAsync("messaging.incoming", notification);
+            await _eventBus.BroadcastAsync(MessagingConstants.IncomingMessageEventType, notification);
 
             return Ok();
         }

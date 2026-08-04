@@ -69,6 +69,14 @@ public class MessagingPluginRegistrar : IPluginRegistrar
 
         if (messageRetentionEnabled)
             services.AddHostedService<MessageRetentionService>();
+
+        // Default ON: inert per round on any installation without an enabled provider whose adapter
+        // can poll. Where a webhook is reachable, the poll simply finds nothing the webhook has not
+        // already stored - IngestInboundMessageAsync deduplicates on ExternalMessageId.
+        var inboundPollingEnabled = configuration.GetValue<bool>("BackgroundServices:InboundMessagePolling", true);
+
+        if (inboundPollingEnabled)
+            services.AddHostedService<InboundMessagePollingService>();
     }
 
     public void ConfigureDbModel(ModelBuilder modelBuilder)

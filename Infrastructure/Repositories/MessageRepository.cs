@@ -56,6 +56,21 @@ public class MessageRepository : IMessageRepository
         return await _context.Set<Message>().CountAsync(m => m.ProviderId == providerId);
     }
 
+    public async Task<bool> InboundExistsAsync(Guid providerId, string externalMessageId, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(externalMessageId))
+        {
+            return false;
+        }
+
+        return await _context.Set<Message>()
+            .AnyAsync(
+                m => m.ProviderId == providerId
+                    && m.Direction == MessageDirection.Inbound
+                    && m.ExternalMessageId == externalMessageId,
+                ct);
+    }
+
     public async Task AddAsync(Message message)
     {
         await _context.Set<Message>().AddAsync(message);

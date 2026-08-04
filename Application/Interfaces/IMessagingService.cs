@@ -30,6 +30,14 @@ public interface IMessagingService
 
     Task<WebhookProcessingResult> ProcessIncomingMessageAsync(string providerName, string body, IReadOnlyDictionary<string, string> headers, CancellationToken ct = default);
 
+    /// <summary>
+    /// Persists one already-parsed inbound message. Shared by the webhook route and the poller so
+    /// both produce identical rows. Returns null when the provider is unknown or the message was
+    /// already stored - a poll cursor that slips would otherwise replay messages, and each replay
+    /// costs an LLM turn plus an outbound reply.
+    /// </summary>
+    Task<Message?> IngestInboundMessageAsync(string providerName, IncomingMessage incoming, CancellationToken ct = default);
+
     Task<string?> VerifySubscriptionChallengeAsync(string providerName, string? verifyToken, string challenge, CancellationToken ct = default);
 
     Task<bool> TestProviderAsync(Guid providerId, CancellationToken ct = default);

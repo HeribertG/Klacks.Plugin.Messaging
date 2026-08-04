@@ -16,6 +16,8 @@ public interface IMessageRepository
 
     Task<int> GetMessageCountAsync(Guid providerId);
 
+    Task<bool> InboundExistsAsync(Guid providerId, string externalMessageId, CancellationToken ct = default);
+
     Task AddAsync(Message message);
 
     Task DeleteOldestMessagesAsync(Guid providerId, int retainCount);
