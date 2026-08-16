@@ -35,6 +35,8 @@ public class SignalMessagingProvider : IMessagingProviderAdapter
 
     public bool SupportsPhoneAsRecipient => true;
 
+    public bool SupportsStructuredActions => false;
+
     public SignalMessagingProvider(HttpClient httpClient, ILogger<SignalMessagingProvider> logger)
     {
         _httpClient = httpClient;

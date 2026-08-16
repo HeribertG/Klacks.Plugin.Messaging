@@ -54,6 +54,8 @@ public class WeChatMessagingProvider : IMessagingProviderAdapter
 
     public bool SupportsPhoneAsRecipient => false;
 
+    public bool SupportsStructuredActions => false;
+
     public WeChatMessagingProvider(HttpClient httpClient, IMemoryCache cache, ILogger<WeChatMessagingProvider> logger)
     {
         _httpClient = httpClient;

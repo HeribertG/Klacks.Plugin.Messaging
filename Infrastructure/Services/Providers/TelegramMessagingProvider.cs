@@ -30,6 +30,8 @@ public class TelegramMessagingProvider : IMessagingProviderAdapter, ITelegramBot
 
     public bool SupportsPhoneAsRecipient => false;
 
+    public bool SupportsStructuredActions => true;
+
     public TelegramMessagingProvider(HttpClient httpClient, IMemoryCache cache, ILogger<TelegramMessagingProvider> logger)
     {
         _httpClient = httpClient;
@@ -144,14 +146,21 @@ public class TelegramMessagingProvider : IMessagingProviderAdapter, ITelegramBot
     public WebhookValidationResult ValidateWebhook(WebhookValidationContext context)
     {
         if (string.IsNullOrWhiteSpace(context.WebhookSecret))
-            return new WebhookValidationResult(true);
+        {
+            _logger.LogWarning("Telegram webhook validation failed: no WebhookSecret configured for this provider");
+            return new WebhookValidationResult(false);
+        }
 
         var signature = context.GetHeader(SecretTokenHeader) ?? string.Empty;
 
-        return new WebhookValidationResult(
-            CryptographicOperations.FixedTimeEquals(
-                System.Text.Encoding.UTF8.GetBytes(signature),
-                System.Text.Encoding.UTF8.GetBytes(context.WebhookSecret)));
+        var isValid = CryptographicOperations.FixedTimeEquals(
+            System.Text.Encoding.UTF8.GetBytes(signature),
+            System.Text.Encoding.UTF8.GetBytes(context.WebhookSecret));
+
+        if (!isValid)
+            _logger.LogWarning("Telegram webhook validation failed: secret token mismatch");
+
+        return new WebhookValidationResult(isValid);
     }
 
     public IncomingMessage? ParseWebhookPayload(string body)

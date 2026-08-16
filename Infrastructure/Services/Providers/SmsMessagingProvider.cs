@@ -42,6 +42,8 @@ public class SmsMessagingProvider : IMessagingProviderAdapter
 
     public bool SupportsPhoneAsRecipient => true;
 
+    public bool SupportsStructuredActions => false;
+
     public SmsMessagingProvider(HttpClient httpClient, ILogger<SmsMessagingProvider> logger)
     {
         _httpClient = httpClient;

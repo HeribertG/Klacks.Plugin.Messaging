@@ -9,6 +9,12 @@ public static class MessagingConstants
 {
     public const string PluginName = "messaging";
 
+    /// <summary>
+    /// Role name the host issues as a role claim. Kept as a constant because it is used both in an
+    /// attribute argument and in an imperative check, and the two must never drift apart.
+    /// </summary>
+    public const string RoleAdmin = "Admin";
+
     public const string ProviderWhatsApp = "WhatsApp";
     public const string ProviderTelegram = "Telegram";
     public const string ProviderSignal = "Signal";
@@ -51,4 +57,17 @@ public static class MessagingConstants
     /// Settings key prefix holding the per-provider polling cursor; the provider name is appended.
     /// </summary>
     public const string InboundPollCursorSettingPrefix = "MESSAGING_POLL_CURSOR_";
+
+    /// <summary>
+    /// Minutes for which a discarded inbound sender is logged only once, per provider and sender.
+    /// Without a window, a bot writing continuously would produce one log line per message.
+    /// </summary>
+    public const int UnknownSenderLogSuppressionMinutes = 60;
+
+    /// <summary>
+    /// Error recorded when structured actions are requested from a provider that cannot carry them.
+    /// Placeholder 0 is the provider name.
+    /// </summary>
+    public const string StructuredActionsUnsupportedErrorFormat =
+        "Provider '{0}' cannot carry structured actions: the recipient would have no way to answer";
 }

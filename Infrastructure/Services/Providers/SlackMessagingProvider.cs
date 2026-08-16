@@ -58,6 +58,8 @@ public class SlackMessagingProvider : IMessagingProviderAdapter, IInboundMessage
 
     public bool SupportsPhoneAsRecipient => false;
 
+    public bool SupportsStructuredActions => true;
+
     public SlackMessagingProvider(HttpClient httpClient, ILogger<SlackMessagingProvider> logger)
     {
         _httpClient = httpClient;

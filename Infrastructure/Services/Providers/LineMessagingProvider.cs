@@ -47,6 +47,8 @@ public class LineMessagingProvider : IMessagingProviderAdapter
 
     public bool SupportsPhoneAsRecipient => false;
 
+    public bool SupportsStructuredActions => true;
+
     public LineMessagingProvider(HttpClient httpClient, ILogger<LineMessagingProvider> logger)
     {
         _httpClient = httpClient;

@@ -1,8 +1,9 @@
 // Copyright (c) Heribert Gasparoli Private. All rights reserved.
 
 /// <summary>
-/// Constants governing rate-limit handling for outbound messaging: retry attempts on
-/// throttled responses, backoff bounds and the pacing interval between broadcast sends.
+/// Constants governing rate-limit handling for messaging: retry attempts on throttled outbound
+/// responses, backoff bounds, the pacing interval between broadcast sends, and the request cap
+/// applied to the inbound webhook route.
 /// </summary>
 namespace Klacks.Plugin.Messaging.Application.Constants;
 
@@ -59,4 +60,28 @@ public static class MessagingRateLimitConstants
     /// cannot turn a broadcast into an endless request.
     /// </summary>
     public const int MaxBroadcastPacingMilliseconds = 5000;
+
+    /// <summary>
+    /// Name of the ASP.NET Core rate limiting policy applied to the inbound webhook route.
+    /// The route is [AllowAnonymous] by necessity (providers call it unauthenticated), so this
+    /// is the only throttle standing between an internet-facing endpoint and a request flood.
+    /// </summary>
+    public const string WebhookPolicyName = "messaging-webhook";
+
+    /// <summary>
+    /// Default permit count per partition (client IP) within WebhookRateLimitWindow. Sized well
+    /// above legitimate provider traffic for a single installation, low enough to blunt a flood.
+    /// </summary>
+    public const int DefaultWebhookPermitLimit = 30;
+
+    /// <summary>
+    /// Configuration key allowing the webhook permit limit to be tuned per installation without
+    /// a code change, e.g. for a deployment that fans in many providers behind one IP.
+    /// </summary>
+    public const string SettingWebhookPermitLimit = "Messaging:WebhookRateLimitPermitLimit";
+
+    /// <summary>
+    /// Fixed window over which WebhookPermitLimit is enforced.
+    /// </summary>
+    public static readonly TimeSpan WebhookRateLimitWindow = TimeSpan.FromMinutes(1);
 }

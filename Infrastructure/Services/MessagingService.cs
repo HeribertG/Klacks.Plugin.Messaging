@@ -10,21 +10,34 @@
 /// <param name="_adapterFactory">Factory for creating provider-specific adapters</param>
 /// <param name="_clientIdNumberReader">Reader for resolving client GUIDs from integer id numbers</param>
 /// <param name="_settingsReader">Reader for the configurable broadcast pacing interval</param>
+/// <param name="_ownerMessengerReader">Second source of known inbound senders, next to MessengerContact</param>
+/// <param name="_userMessengerContactRepository">Third source of known inbound senders: the application users who paired a channel</param>
+/// <param name="_inboundObservers">Anyone in the host who wants to hear that a known user answered; empty is a valid state</param>
+/// <param name="_logSuppressionCache">Keeps a discarded sender from being logged on every message</param>
 /// <param name="_logger">Logger instance</param>
+using System.Globalization;
 using Klacks.Plugin.Contracts;
 using Klacks.Plugin.Messaging.Application.Constants;
 using Klacks.Plugin.Messaging.Application.Interfaces;
 using Klacks.Plugin.Messaging.Domain.Enums;
 using Klacks.Plugin.Messaging.Domain.Interfaces;
 using Klacks.Plugin.Messaging.Domain.Models;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace Klacks.Plugin.Messaging.Infrastructure.Services;
 
 public class MessagingService : IMessagingService
 {
+    private const string UnknownSenderLogKeyPrefix = "messaging:unknown-sender:";
+    private const char CacheKeySeparator = '|';
+
     private readonly IMessagingProviderRepository _providerRepository;
     private readonly IMessageRepository _messageRepository;
     private readonly IMessengerContactRepository _messengerContactRepository;
+    private readonly IOwnerMessengerReader _ownerMessengerReader;
+    private readonly IUserMessengerContactRepository _userMessengerContactRepository;
+    private readonly IEnumerable<IInboundMessengerObserver> _inboundObservers;
+    private readonly IMemoryCache _logSuppressionCache;
     private readonly IClientGroupReader _clientGroupReader;
     private readonly IClientIdNumberReader _clientIdNumberReader;
     private readonly IClientPhoneReader _clientPhoneReader;
@@ -37,6 +50,10 @@ public class MessagingService : IMessagingService
         IMessagingProviderRepository providerRepository,
         IMessageRepository messageRepository,
         IMessengerContactRepository messengerContactRepository,
+        IOwnerMessengerReader ownerMessengerReader,
+        IUserMessengerContactRepository userMessengerContactRepository,
+        IEnumerable<IInboundMessengerObserver> inboundObservers,
+        IMemoryCache logSuppressionCache,
         IClientGroupReader clientGroupReader,
         IClientIdNumberReader clientIdNumberReader,
         IClientPhoneReader clientPhoneReader,
@@ -48,6 +65,10 @@ public class MessagingService : IMessagingService
         _providerRepository = providerRepository;
         _messageRepository = messageRepository;
         _messengerContactRepository = messengerContactRepository;
+        _ownerMessengerReader = ownerMessengerReader;
+        _userMessengerContactRepository = userMessengerContactRepository;
+        _inboundObservers = inboundObservers;
+        _logSuppressionCache = logSuppressionCache;
         _clientGroupReader = clientGroupReader;
         _clientIdNumberReader = clientIdNumberReader;
         _clientPhoneReader = clientPhoneReader;
@@ -67,8 +88,32 @@ public class MessagingService : IMessagingService
             return new SendMessageResult(false, ErrorMessage: $"Provider '{providerName}' is disabled");
 
         var adapter = _adapterFactory.Create(provider.ProviderType);
+
+        if (request.Actions is { Count: > 0 } && !adapter.SupportsStructuredActions)
+        {
+            return await PersistOutboundAsync(provider, request, new SendMessageResult(
+                false,
+                ErrorMessage: string.Format(
+                    CultureInfo.InvariantCulture,
+                    MessagingConstants.StructuredActionsUnsupportedErrorFormat,
+                    providerName)));
+        }
+
         var result = await adapter.SendAsync(request, provider.ConfigJson, ct);
 
+        return await PersistOutboundAsync(provider, request, result);
+    }
+
+    /// <summary>
+    /// Stores the outcome of an outbound attempt. A refused send is recorded here rather than
+    /// returned early on purpose: structured actions exist to produce an exact record, and an early
+    /// return would leave none of the attempt behind.
+    /// </summary>
+    private async Task<SendMessageResult> PersistOutboundAsync(
+        MessagingProvider provider,
+        SendMessageRequest request,
+        SendMessageResult result)
+    {
         var message = new Message
         {
             Id = Guid.NewGuid(),
@@ -111,6 +156,12 @@ public class MessagingService : IMessagingService
         var provider = await ResolveProviderAsync(providerName);
         if (provider == null)
             throw new InvalidOperationException($"Provider '{providerName}' not found");
+
+        if (!provider.IsEnabled)
+        {
+            _logger.LogWarning("Rejected incoming webhook for disabled provider '{Provider}'", providerName);
+            throw new UnauthorizedAccessException($"Provider '{providerName}' is disabled");
+        }
 
         var adapter = _adapterFactory.Create(provider.ProviderType);
 
@@ -156,22 +207,35 @@ public class MessagingService : IMessagingService
             return null;
         }
 
-        Guid? clientId = null;
-        if (Enum.TryParse<MessengerType>(provider.ProviderType, ignoreCase: true, out var messengerType))
+        if (!Enum.TryParse<MessengerType>(provider.ProviderType, ignoreCase: true, out var messengerType))
         {
-            var contact = await _messengerContactRepository.GetByTypeAndValueAsync(messengerType, incoming.Sender, ct);
-            clientId = contact?.ClientId;
+            _logger.LogWarning(
+                "Cannot map provider type '{ProviderType}' to MessengerType; discarding inbound message from provider {Provider}",
+                provider.ProviderType,
+                provider.Name);
+            return null;
         }
-        else
+
+        var contact = await _messengerContactRepository.GetByTypeAndValueAsync(messengerType, incoming.Sender, ct);
+        UserMessengerContact? userContact = null;
+
+        if (contact == null)
         {
-            _logger.LogWarning("Cannot map provider type '{ProviderType}' to MessengerType for inbound contact lookup", provider.ProviderType);
+            var isOwner = await IsKnownSenderAsync(messengerType, incoming.Sender, ct);
+            userContact = await _userMessengerContactRepository.GetByTypeAndValueAsync(messengerType, incoming.Sender, ct);
+
+            if (!isOwner && userContact == null)
+            {
+                LogUnknownSenderOnce(provider, incoming.Sender);
+                return null;
+            }
         }
 
         var message = new Message
         {
             Id = Guid.NewGuid(),
             ProviderId = provider.Id,
-            ClientId = clientId,
+            ClientId = contact?.ClientId,
             ExternalMessageId = incoming.ExternalMessageId,
             Sender = incoming.Sender,
             SenderDisplayName = incoming.SenderDisplayName,
@@ -188,7 +252,97 @@ public class MessagingService : IMessagingService
 
         _logger.LogInformation("Processed incoming message {MessageId} from provider {Provider}", message.Id, provider.Name);
 
+        await NotifyInboundObserversAsync(message, messengerType, userContact, ct);
+
         return message;
+    }
+
+    /// <summary>
+    /// Tells the host that a message from a paired application user arrived. Stored is not the same
+    /// as heard: without this the reply of a planner would sit in the messages table and reach nobody.
+    /// Runs after the commit, so an observer always sees a message that really exists, and every
+    /// failure is swallowed - an observer that throws must not undo an inbound message that was
+    /// already persisted, and must not stop the remaining observers either.
+    /// </summary>
+    private async Task NotifyInboundObserversAsync(
+        Message message,
+        MessengerType messengerType,
+        UserMessengerContact? userContact,
+        CancellationToken ct)
+    {
+        if (userContact == null)
+            return;
+
+        var notification = new InboundMessengerMessage(
+            message.Id,
+            userContact.UserId,
+            messengerType.ToString(),
+            message.Sender,
+            message.SenderDisplayName,
+            message.Content,
+            message.Timestamp);
+
+        foreach (var observer in _inboundObservers)
+        {
+            try
+            {
+                await observer.OnInboundMessageAsync(notification, ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Inbound message observer {Observer} failed for message {MessageId}",
+                    observer.GetType().Name,
+                    message.Id);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Second source of known senders, consulted only when no MessengerContact matched. The owner's
+    /// own messenger identity lives in the APP_OWNER_MESSENGERS setting and deliberately has no
+    /// MessengerContact row: that table hangs off a non-nullable ClientId and the owner need not be a
+    /// client at all. Discarding unknown senders without this check would silently and permanently
+    /// kill the Slack owner bridge, which answers exactly these stored inbound messages.
+    /// The third source, UserMessengerContact, is consulted by the caller rather than folded in here,
+    /// because a planner replying to an escalation is not only known through that table, they are
+    /// known BY it: the caller needs the matched row itself to tell the host who answered, and a
+    /// method returning bool would force the same lookup to run twice.
+    /// </summary>
+    private async Task<bool> IsKnownSenderAsync(MessengerType messengerType, string sender, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(sender))
+            return false;
+
+        var ownerEntries = await _ownerMessengerReader.GetAllAsync(ct);
+
+        return ownerEntries.Any(entry =>
+            entry.Type == messengerType
+            && string.Equals(entry.Value, sender, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Logs a discarded sender once per provider and sender within a suppression window rather than
+    /// on every message, so a bot writing continuously cannot fill the log by itself. Deliberately
+    /// not once-ever: a recurring rejection has to stay diagnosable, and a process restart would
+    /// clear a once-ever marker anyway.
+    /// </summary>
+    private void LogUnknownSenderOnce(MessagingProvider provider, string sender)
+    {
+        var cacheKey = UnknownSenderLogKeyPrefix + provider.Id + CacheKeySeparator + sender;
+        if (_logSuppressionCache.TryGetValue(cacheKey, out _))
+            return;
+
+        _logSuppressionCache.Set(
+            cacheKey,
+            true,
+            TimeSpan.FromMinutes(MessagingConstants.UnknownSenderLogSuppressionMinutes));
+
+        _logger.LogWarning(
+            "Discarded inbound message from unknown sender {Sender} on provider {Provider}: no messenger contact, no paired user channel and not an owner messenger identity",
+            sender,
+            provider.Name);
     }
 
     public async Task<string?> VerifySubscriptionChallengeAsync(string providerName, string? verifyToken, string challenge, CancellationToken ct = default)

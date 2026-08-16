@@ -54,6 +54,8 @@ public class ViberMessagingProvider : IMessagingProviderAdapter, IWebhookRegistr
 
     public bool SupportsPhoneAsRecipient => false;
 
+    public bool SupportsStructuredActions => true;
+
     public ViberMessagingProvider(HttpClient httpClient, ILogger<ViberMessagingProvider> logger)
     {
         _httpClient = httpClient;

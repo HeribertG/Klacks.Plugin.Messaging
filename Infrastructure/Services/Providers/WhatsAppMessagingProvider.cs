@@ -58,6 +58,8 @@ public class WhatsAppMessagingProvider : IMessagingProviderAdapter, IWebhookSubs
 
     public bool SupportsPhoneAsRecipient => true;
 
+    public bool SupportsStructuredActions => true;
+
     public WhatsAppMessagingProvider(HttpClient httpClient, ILogger<WhatsAppMessagingProvider> logger)
     {
         _httpClient = httpClient;

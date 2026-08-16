@@ -6,7 +6,7 @@
 /// an installation on a workstation or behind NAT does not have - without this service, inbound
 /// traffic never arrives at all on such an installation.
 /// Only providers that are enabled are polled, so the provider toggle is a real off switch for the
-/// inbound direction too, unlike the webhook route.
+/// inbound direction here too, same as the webhook route.
 /// </summary>
 /// <param name="_serviceProvider">Service provider for creating a scope per polling round.</param>
 /// <param name="_logger">Logger instance.</param>

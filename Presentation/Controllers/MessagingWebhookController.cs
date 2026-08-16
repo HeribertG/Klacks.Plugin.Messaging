@@ -10,10 +10,13 @@ using Klacks.Plugin.Contracts.Filters;
 using Klacks.Plugin.Messaging.Application.Constants;
 using Klacks.Plugin.Messaging.Application.DTOs;
 using Klacks.Plugin.Messaging.Application.Interfaces;
+using Klacks.Plugin.Messaging.Domain.Enums;
 using Klacks.Plugin.Messaging.Domain.Interfaces;
+using Klacks.Plugin.Messaging.Domain.Models;
 using Klacks.Plugin.Messaging.Infrastructure.Services.Providers;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Klacks.Plugin.Messaging.Presentation.Controllers;
 
@@ -21,6 +24,7 @@ namespace Klacks.Plugin.Messaging.Presentation.Controllers;
 [Route("api/messaging/webhook")]
 [AllowAnonymous]
 [RequireFeaturePlugin(MessagingConstants.PluginName)]
+[EnableRateLimiting(MessagingRateLimitConstants.WebhookPolicyName)]
 public class MessagingWebhookController : ControllerBase
 {
     private const int MaxChallengeLength = 256;
@@ -29,6 +33,7 @@ public class MessagingWebhookController : ControllerBase
     private readonly IMessagingProviderRepository _providerRepository;
     private readonly IPluginEventBus _eventBus;
     private readonly ITelegramOnboardingRedemptionService _redemptionService;
+    private readonly IUserMessengerPairingService _pairingService;
     private readonly ILogger<MessagingWebhookController> _logger;
 
     public MessagingWebhookController(
@@ -36,12 +41,14 @@ public class MessagingWebhookController : ControllerBase
         IMessagingProviderRepository providerRepository,
         IPluginEventBus eventBus,
         ITelegramOnboardingRedemptionService redemptionService,
+        IUserMessengerPairingService pairingService,
         ILogger<MessagingWebhookController> logger)
     {
         _messagingService = messagingService;
         _providerRepository = providerRepository;
         _eventBus = eventBus;
         _redemptionService = redemptionService;
+        _pairingService = pairingService;
         _logger = logger;
     }
 
@@ -119,12 +126,31 @@ public class MessagingWebhookController : ControllerBase
         return Ok(response);
     }
 
+    /// <summary>
+    /// One /start command now carries two kinds of code: the employee invitation token and the
+    /// pairing code an application user issued for themselves. The employee token is tried first and
+    /// its behaviour is untouched; only a token no invitation knows is offered to the pairing store.
+    /// The method keeps returning true in every case a /start was recognised, exactly as before -
+    /// falling through on an unknown code would newly route it into ProcessIncomingMessageAsync and
+    /// change a path that works today, for no gain.
+    /// </summary>
     private async Task<bool> TryHandleStartCommandAsync(string body, CancellationToken ct)
     {
         if (!TryExtractStartCommand(body, out var token, out var chatId))
             return false;
 
         var result = await _redemptionService.RedeemAsync(token, chatId, ct);
+
+        if (result == OnboardingRedeemResult.TokenNotFound)
+        {
+            var pairingResult = await _pairingService.RedeemAsync(token, MessengerType.Telegram, chatId, ct);
+            _logger.LogInformation(
+                "User messenger pairing result {Result} for chat {ChatId}",
+                pairingResult,
+                chatId);
+            return true;
+        }
+
         _logger.LogInformation(
             "Telegram onboarding redemption result {Result} for chat {ChatId}",
             result,

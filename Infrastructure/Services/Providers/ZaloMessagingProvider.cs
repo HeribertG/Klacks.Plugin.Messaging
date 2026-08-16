@@ -42,6 +42,8 @@ public class ZaloMessagingProvider : IMessagingProviderAdapter
 
     public bool SupportsPhoneAsRecipient => false;
 
+    public bool SupportsStructuredActions => false;
+
     public ZaloMessagingProvider(HttpClient httpClient, ILogger<ZaloMessagingProvider> logger)
     {
         _httpClient = httpClient;

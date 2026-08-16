@@ -49,6 +49,8 @@ public class KakaoTalkMessagingProvider : IMessagingProviderAdapter
 
     public bool SupportsPhoneAsRecipient => false;
 
+    public bool SupportsStructuredActions => false;
+
     public KakaoTalkMessagingProvider(HttpClient httpClient, ILogger<KakaoTalkMessagingProvider> logger)
     {
         _httpClient = httpClient;

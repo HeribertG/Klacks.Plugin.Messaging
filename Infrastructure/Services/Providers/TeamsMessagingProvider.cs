@@ -37,6 +37,8 @@ public class TeamsMessagingProvider : IMessagingProviderAdapter
 
     public bool SupportsPhoneAsRecipient => false;
 
+    public bool SupportsStructuredActions => false;
+
     public TeamsMessagingProvider(HttpClient httpClient, ILogger<TeamsMessagingProvider> logger)
     {
         _httpClient = httpClient;

@@ -31,5 +31,6 @@ public class MessageConfiguration : IEntityTypeConfiguration<Message>
         builder.HasIndex(m => m.Direction);
         builder.HasIndex(m => m.ClientId);
         builder.HasIndex(m => m.BroadcastId);
+        builder.HasIndex(m => m.ConversationId);
     }
 }
