@@ -8,6 +8,7 @@
 /// <param name="id">Unique identifier of the message</param>
 /// <param name="direction">Optional filter by message direction</param>
 /// <param name="sender">Optional filter by sender address</param>
+/// <param name="scope">Optional filter by client-vs-internal scope</param>
 /// <param name="count">Number of messages to return</param>
 /// <param name="offset">Number of messages to skip</param>
 /// <param name="body">Raw webhook request body</param>
@@ -26,7 +27,7 @@ public interface IMessagingService
 
     Task<Message?> GetMessageAsync(Guid id, CancellationToken ct = default);
 
-    Task<IReadOnlyList<Message>> GetMessagesAsync(Guid? providerId, MessageDirection? direction, string? sender, int count = 20, int offset = 0, CancellationToken ct = default);
+    Task<IReadOnlyList<Message>> GetMessagesAsync(Guid? providerId, MessageDirection? direction, string? sender, MessageScope? scope = null, int count = 20, int offset = 0, CancellationToken ct = default);
 
     Task<WebhookProcessingResult> ProcessIncomingMessageAsync(string providerName, string body, IReadOnlyDictionary<string, string> headers, CancellationToken ct = default);
 

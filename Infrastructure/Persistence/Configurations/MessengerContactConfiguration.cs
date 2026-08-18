@@ -23,5 +23,6 @@ public class MessengerContactConfiguration : IEntityTypeConfiguration<MessengerC
         builder.Property(c => c.CreateTime).IsRequired();
         builder.HasIndex(c => c.ClientId);
         builder.HasIndex(c => new { c.ClientId, c.Type });
+        builder.HasIndex(c => new { c.Type, c.Value });
     }
 }

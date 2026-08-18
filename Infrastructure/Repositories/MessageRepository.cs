@@ -27,7 +27,7 @@ public class MessageRepository : IMessageRepository
     }
 
     public async Task<IReadOnlyList<Message>> GetMessagesAsync(
-        Guid? providerId, MessageDirection? direction, string? sender, int count, int offset)
+        Guid? providerId, MessageDirection? direction, string? sender, MessageScope? scope, int count, int offset)
     {
         var query = _context.Set<Message>().AsQueryable();
 
@@ -39,6 +39,11 @@ public class MessageRepository : IMessageRepository
 
         if (!string.IsNullOrWhiteSpace(sender))
             query = query.Where(m => m.Sender == sender);
+
+        if (scope == MessageScope.Client)
+            query = query.Where(m => m.ClientId != null);
+        else if (scope == MessageScope.Internal)
+            query = query.Where(m => m.ClientId == null);
 
         var pageDesc = await query
             .OrderByDescending(m => m.Timestamp)

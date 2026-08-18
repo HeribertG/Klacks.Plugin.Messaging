@@ -96,28 +96,32 @@ public class MessagingService : IMessagingService
                 ErrorMessage: string.Format(
                     CultureInfo.InvariantCulture,
                     MessagingConstants.StructuredActionsUnsupportedErrorFormat,
-                    providerName)));
+                    providerName)), ct);
         }
 
         var result = await adapter.SendAsync(request, provider.ConfigJson, ct);
 
-        return await PersistOutboundAsync(provider, request, result);
+        return await PersistOutboundAsync(provider, request, result, ct);
     }
 
     /// <summary>
     /// Stores the outcome of an outbound attempt. A refused send is recorded here rather than
     /// returned early on purpose: structured actions exist to produce an exact record, and an early
-    /// return would leave none of the attempt behind.
+    /// return would leave none of the attempt behind. ClientId is resolved the same way as on the
+    /// inbound side (MessengerContact lookup by type+value) so outbound client replies classify as
+    /// scope=Client instead of falling into internal by default.
     /// </summary>
     private async Task<SendMessageResult> PersistOutboundAsync(
         MessagingProvider provider,
         SendMessageRequest request,
-        SendMessageResult result)
+        SendMessageResult result,
+        CancellationToken ct)
     {
         var message = new Message
         {
             Id = Guid.NewGuid(),
             ProviderId = provider.Id,
+            ClientId = await ResolveOutboundClientIdAsync(provider, request.Recipient, ct),
             ExternalMessageId = result.ExternalMessageId ?? string.Empty,
             Recipient = request.Recipient,
             Content = request.Content,
@@ -135,6 +139,15 @@ public class MessagingService : IMessagingService
         return result;
     }
 
+    private async Task<Guid?> ResolveOutboundClientIdAsync(MessagingProvider provider, string recipient, CancellationToken ct)
+    {
+        if (!Enum.TryParse<MessengerType>(provider.ProviderType, ignoreCase: true, out var messengerType))
+            return null;
+
+        var contact = await _messengerContactRepository.GetByTypeAndValueAsync(messengerType, recipient, ct);
+        return contact?.ClientId;
+    }
+
     public async Task<Message?> GetMessageAsync(Guid id, CancellationToken ct = default)
     {
         return await _messageRepository.GetByIdAsync(id);
@@ -144,11 +157,12 @@ public class MessagingService : IMessagingService
         Guid? providerId,
         MessageDirection? direction,
         string? sender,
+        MessageScope? scope = null,
         int count = 20,
         int offset = 0,
         CancellationToken ct = default)
     {
-        return await _messageRepository.GetMessagesAsync(providerId, direction, sender, count, offset);
+        return await _messageRepository.GetMessagesAsync(providerId, direction, sender, scope, count, offset);
     }
 
     public async Task<WebhookProcessingResult> ProcessIncomingMessageAsync(string providerName, string body, IReadOnlyDictionary<string, string> headers, CancellationToken ct = default)

@@ -57,7 +57,7 @@ public class ReadMessagesSkill : BaseSkillImplementation
             _ => null
         };
 
-        var messages = await _messageRepository.GetMessagesAsync(providerId, direction, sender, count, 0);
+        var messages = await _messageRepository.GetMessagesAsync(providerId, direction, sender, scope: null, count, 0);
 
         var result = messages.Select(m => new
         {

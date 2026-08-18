@@ -12,7 +12,7 @@ public interface IMessageRepository
 {
     Task<Message?> GetByIdAsync(Guid id);
 
-    Task<IReadOnlyList<Message>> GetMessagesAsync(Guid? providerId, MessageDirection? direction, string? sender, int count, int offset);
+    Task<IReadOnlyList<Message>> GetMessagesAsync(Guid? providerId, MessageDirection? direction, string? sender, MessageScope? scope, int count, int offset);
 
     Task<int> GetMessageCountAsync(Guid providerId);
 

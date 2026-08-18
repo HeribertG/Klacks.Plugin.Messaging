@@ -140,10 +140,11 @@ public class MessagingController : ControllerBase
         [FromQuery] Guid? providerId = null,
         [FromQuery] MessageDirection? direction = null,
         [FromQuery] string? sender = null,
+        [FromQuery] MessageScope? scope = null,
         [FromQuery] int count = 50,
         [FromQuery] int offset = 0)
     {
-        var messages = await _messagingService.GetMessagesAsync(providerId, direction, sender, count, offset);
+        var messages = await _messagingService.GetMessagesAsync(providerId, direction, sender, scope, count, offset);
         return Ok(messages.Select(m => ToMessageDto(m)).ToList());
     }
 
