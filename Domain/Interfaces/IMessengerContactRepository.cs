@@ -16,7 +16,7 @@ public interface IMessengerContactRepository
 
     Task<MessengerContact?> GetByClientAndTypeAsync(Guid clientId, MessengerType type, CancellationToken ct = default);
 
-    Task<IReadOnlyList<MessengerContact>> SearchByClientNameAsync(string nameQuery, MessengerType type, CancellationToken ct = default);
+    Task<IReadOnlyList<ClientMessengerMatch>> SearchByClientNameAsync(string nameQuery, MessengerType type, CancellationToken ct = default);
 
     Task<MessengerContact?> GetByTypeAndValueAsync(MessengerType type, string value, CancellationToken ct = default);
 

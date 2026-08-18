@@ -43,13 +43,13 @@ public class MessengerContactRepository : IMessengerContactRepository
             .FirstOrDefaultAsync(ct);
     }
 
-    public async Task<IReadOnlyList<MessengerContact>> SearchByClientNameAsync(string nameQuery, MessengerType type, CancellationToken ct = default)
+    public async Task<IReadOnlyList<ClientMessengerMatch>> SearchByClientNameAsync(string nameQuery, MessengerType type, CancellationToken ct = default)
     {
         var keywords = nameQuery.Trim().ToLowerInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries);
         if (keywords.Length == 0)
-            return Array.Empty<MessengerContact>();
+            return Array.Empty<ClientMessengerMatch>();
 
-        var sql = @"SELECT mc.id, mc.client_id, mc.type, mc.value, mc.description, mc.is_deleted, mc.create_time, mc.update_time
+        var sql = @"SELECT mc.client_id, mc.value, c.first_name, c.name, c.company
                     FROM messenger_contact mc
                     INNER JOIN client c ON c.id = mc.client_id
                     WHERE mc.is_deleted = false
@@ -65,7 +65,7 @@ public class MessengerContactRepository : IMessengerContactRepository
             parameters.Add(new Npgsql.NpgsqlParameter($"p_kw{i}", $"%{keywords[i]}%"));
         }
 
-        return await _context.Set<MessengerContact>()
+        return await _context.Set<ClientMessengerMatch>()
             .FromSqlRaw(sql, parameters.Cast<object>().ToArray())
             .AsNoTracking()
             .ToListAsync(ct);
