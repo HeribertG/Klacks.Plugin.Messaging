@@ -56,6 +56,19 @@ public class UserMessengerPairingService : IUserMessengerPairingService
         return issued;
     }
 
+    public async Task<UserMessengerPairingCode> IssueAdminInviteAsync(string targetUserId, string issuedByAdminId, CancellationToken ct = default)
+    {
+        var issued = await _codeStore.IssueAdminInviteAsync(targetUserId, MessengerType.Telegram, issuedByAdminId, ct);
+
+        _logger.LogInformation(
+            "Admin {AdminId} issued a messenger pairing invite for user {UserId}, valid until {ExpiresAt}",
+            issuedByAdminId,
+            targetUserId,
+            issued.ExpiresAt);
+
+        return issued;
+    }
+
     public async Task<OnboardingRedeemResult> RedeemAsync(
         string code,
         MessengerType type,

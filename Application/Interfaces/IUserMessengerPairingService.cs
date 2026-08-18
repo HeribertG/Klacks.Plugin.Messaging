@@ -11,11 +11,19 @@ namespace Klacks.Plugin.Messaging.Application.Interfaces;
 public interface IUserMessengerPairingService
 {
     /// <summary>
-    /// Issues a code for the given user. There is no parameter for a target user anywhere in this
-    /// flow: the caller passes the identity it was authenticated as, so a code for somebody else is
-    /// not merely forbidden, it cannot be expressed.
+    /// Issues a self-service code for the given user. Callable only from the route that derives
+    /// userId from the caller's own access token - a code for somebody else cannot be expressed
+    /// through this method.
     /// </summary>
     Task<UserMessengerPairingCode> IssueCodeAsync(string userId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Issues a code for a different account on an administrator's behalf, so an admin can nudge a
+    /// user to pair Telegram instead of only being able to point them at their own profile. This is
+    /// the one deliberate exception to "a code can only be issued for the caller": it exists solely
+    /// for the Admin-only invite endpoint and always records issuedByAdminId for audit.
+    /// </summary>
+    Task<UserMessengerPairingCode> IssueAdminInviteAsync(string targetUserId, string issuedByAdminId, CancellationToken ct = default);
 
     /// <summary>
     /// Redeems a code against the identity that sent it and creates the messenger contact.

@@ -27,6 +27,13 @@ public static class UserMessengerPairingConstants
     public const int CodeLifetimeMinutes = 15;
 
     /// <summary>
+    /// Deliberately much longer than the self-service window: an admin-issued invite travels by
+    /// email, and the recipient may not check their inbox for hours. Long enough to comfortably
+    /// span a weekend, short enough to not become a standing cross-account credential.
+    /// </summary>
+    public const int AdminInviteCodeLifetimeHours = 72;
+
+    /// <summary>
     /// How long a used or expired record is kept after its expiry. Without this grace the record
     /// would simply vanish and a user who is late could no longer be told 'expired' rather than
     /// 'unknown', which is exactly the difference that tells them to request a new code.

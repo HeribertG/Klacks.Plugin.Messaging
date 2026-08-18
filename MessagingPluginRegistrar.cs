@@ -65,6 +65,7 @@ public class MessagingPluginRegistrar : IPluginRegistrar
         services.AddScoped<ITelegramRolloutTrigger, TelegramRolloutTrigger>();
         services.AddScoped<IUserMessengerPairingCodeStore, SettingsUserMessengerPairingCodeStore>();
         services.AddScoped<IUserMessengerPairingService, UserMessengerPairingService>();
+        services.AddScoped<IUserInviteSendService, UserInviteSendService>();
 
         services.AddScoped<SendMessageSkill>();
         services.AddScoped<ReadMessagesSkill>();

@@ -21,6 +21,19 @@ public interface IUserMessengerPairingCodeStore
     Task<UserMessengerPairingCode> IssueAsync(string userId, MessengerType type, CancellationToken ct = default);
 
     /// <summary>
+    /// Issues a code on an administrator's behalf for a different account, using the longer
+    /// AdminInviteCodeLifetimeHours window an email-delivered link needs, and records who issued
+    /// it. Superseding rules are unchanged: any earlier unused code for the same user and
+    /// messenger - self- or admin-issued - is dropped, so a user always has exactly one code in
+    /// flight.
+    /// </summary>
+    Task<UserMessengerPairingCode> IssueAdminInviteAsync(
+        string targetUserId,
+        MessengerType type,
+        string issuedByAdminId,
+        CancellationToken ct = default);
+
+    /// <summary>
     /// Looks a code up without consuming it, reporting unknown, expired and already used separately.
     /// </summary>
     Task<UserMessengerPairingLookup> PeekAsync(string code, MessengerType type, CancellationToken ct = default);

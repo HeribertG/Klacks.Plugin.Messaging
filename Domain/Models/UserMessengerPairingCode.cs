@@ -10,6 +10,11 @@
 /// <param name="IssuedAt">UTC instant the code was created</param>
 /// <param name="ExpiresAt">UTC instant after which the code is no longer redeemable</param>
 /// <param name="UsedAt">UTC instant of redemption, or null while unused</param>
+/// <param name="IssuedByAdminId">
+/// AppUser id of the administrator who issued this code on the owner's behalf, or null for the
+/// ordinary self-service code. Kept on the record itself, not a separate log, so the code's origin
+/// travels with it for as long as it exists.
+/// </param>
 
 using Klacks.Plugin.Messaging.Domain.Enums;
 
@@ -21,4 +26,5 @@ public record UserMessengerPairingCode(
     MessengerType Type,
     DateTime IssuedAt,
     DateTime ExpiresAt,
-    DateTime? UsedAt);
+    DateTime? UsedAt,
+    string? IssuedByAdminId = null);

@@ -43,7 +43,37 @@ public class SettingsUserMessengerPairingCodeStore : IUserMessengerPairingCodeSt
         _settingsWriter = settingsWriter;
     }
 
-    public async Task<UserMessengerPairingCode> IssueAsync(string userId, MessengerType type, CancellationToken ct = default)
+    public Task<UserMessengerPairingCode> IssueAsync(string userId, MessengerType type, CancellationToken ct = default) =>
+        IssueInternalAsync(
+            userId,
+            type,
+            TimeSpan.FromMinutes(UserMessengerPairingConstants.CodeLifetimeMinutes),
+            issuedByAdminId: null,
+            ct);
+
+    public Task<UserMessengerPairingCode> IssueAdminInviteAsync(
+        string targetUserId,
+        MessengerType type,
+        string issuedByAdminId,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(issuedByAdminId))
+            throw new ArgumentException("An admin-issued code always records who issued it", nameof(issuedByAdminId));
+
+        return IssueInternalAsync(
+            targetUserId,
+            type,
+            TimeSpan.FromHours(UserMessengerPairingConstants.AdminInviteCodeLifetimeHours),
+            issuedByAdminId,
+            ct);
+    }
+
+    private async Task<UserMessengerPairingCode> IssueInternalAsync(
+        string userId,
+        MessengerType type,
+        TimeSpan lifetime,
+        string? issuedByAdminId,
+        CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(userId))
             throw new ArgumentException("A pairing code always belongs to a user", nameof(userId));
@@ -54,8 +84,9 @@ public class SettingsUserMessengerPairingCodeStore : IUserMessengerPairingCodeSt
             userId,
             type,
             now,
-            now.AddMinutes(UserMessengerPairingConstants.CodeLifetimeMinutes),
-            UsedAt: null);
+            now.Add(lifetime),
+            UsedAt: null,
+            IssuedByAdminId: issuedByAdminId);
 
         var records = await LoadAsync();
         var kept = records

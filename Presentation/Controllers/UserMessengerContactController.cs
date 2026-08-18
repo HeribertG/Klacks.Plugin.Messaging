@@ -5,12 +5,16 @@
 /// pairing code, and drop one again. Distinct from MessengerContactController, which manages the
 /// channels of a Client - an employee - and is operated by a planner on somebody else's behalf.
 /// Every route here derives the user from the access token instead of taking a user id, so the
-/// pairing code route has no way to name a foreign account. Only the two read/delete routes an
-/// administrator legitimately needs across accounts accept a user id, and they are role-gated.
+/// self-service pairing code route has no way to name a foreign account. The read, delete and
+/// admin-invite routes an administrator legitimately needs across accounts accept a user id
+/// instead, and are role-gated - admin-invite is the one deliberate exception that issues a code
+/// for somebody else, see its own doc comment for why.
 /// </summary>
 /// <param name="repository">Reads and soft-deletes the user-level messenger contacts.</param>
 /// <param name="pairingService">Issues the short-lived pairing codes.</param>
 /// <param name="unitOfWork">Commits the delete.</param>
+/// <param name="providerRepository">Resolves the enabled Telegram provider for the admin-invite email.</param>
+/// <param name="inviteSendService">Sends the admin-initiated invite email.</param>
 
 using System.Security.Claims;
 using Klacks.Plugin.Contracts;
@@ -18,6 +22,7 @@ using Klacks.Plugin.Contracts.Filters;
 using Klacks.Plugin.Messaging.Application.Constants;
 using Klacks.Plugin.Messaging.Application.DTOs;
 using Klacks.Plugin.Messaging.Application.Interfaces;
+using Klacks.Plugin.Messaging.Domain.Enums;
 using Klacks.Plugin.Messaging.Domain.Interfaces;
 using Klacks.Plugin.Messaging.Domain.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -36,15 +41,21 @@ public class UserMessengerContactController : ControllerBase
     private readonly IUserMessengerContactRepository _repository;
     private readonly IUserMessengerPairingService _pairingService;
     private readonly IPluginUnitOfWork _unitOfWork;
+    private readonly IMessagingProviderRepository _providerRepository;
+    private readonly IUserInviteSendService _inviteSendService;
 
     public UserMessengerContactController(
         IUserMessengerContactRepository repository,
         IUserMessengerPairingService pairingService,
-        IPluginUnitOfWork unitOfWork)
+        IPluginUnitOfWork unitOfWork,
+        IMessagingProviderRepository providerRepository,
+        IUserInviteSendService inviteSendService)
     {
         _repository = repository;
         _pairingService = pairingService;
         _unitOfWork = unitOfWork;
+        _providerRepository = providerRepository;
+        _inviteSendService = inviteSendService;
     }
 
     [HttpGet("mine")]
@@ -84,6 +95,31 @@ public class UserMessengerContactController : ControllerBase
             Code = issued.Code,
             ExpiresAt = issued.ExpiresAt
         });
+    }
+
+    /// <summary>
+    /// Admin-initiated exception to the self-only pairing rule: issues an admin-scoped code for a
+    /// different account and emails it as a Telegram deep-link, so an admin can actively nudge a
+    /// user instead of only being able to point them at their own profile. Deliberate trade-off
+    /// against the self-only invariant documented on CreatePairingCode above - Admin-gated and
+    /// logged with the issuing admin's id for that reason.
+    /// </summary>
+    [HttpPost("admin-invite/{userId}")]
+    [Authorize(Roles = MessagingConstants.RoleAdmin)]
+    public async Task<ActionResult<object>> SendAdminInvite(string userId, CancellationToken ct)
+    {
+        var adminId = GetCurrentUserId();
+        if (adminId == null)
+            return Unauthorized();
+
+        var providers = await _providerRepository.GetEnabledAsync();
+        var telegram = providers.FirstOrDefault(p =>
+            string.Equals(p.ProviderType, MessagingConstants.ProviderTelegram, StringComparison.OrdinalIgnoreCase));
+        if (telegram == null)
+            return BadRequest(new { result = "NoTelegramProvider" });
+
+        var result = await _inviteSendService.SendAsync(userId, adminId, telegram.ConfigJson, ct);
+        return Ok(new { result = result.ToString() });
     }
 
     [HttpDelete("{id:guid}")]
