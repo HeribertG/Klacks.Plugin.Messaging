@@ -35,6 +35,7 @@ public class OnboardingController : ControllerBase
     }
 
     [HttpPost("telegram/send/{clientId:guid}")]
+    [Authorize(Roles = MessagingConstants.RoleAdmin)]
     public async Task<ActionResult<object>> SendTelegramInvitation(Guid clientId, CancellationToken ct)
     {
         var providers = await _providerRepository.GetEnabledAsync();
