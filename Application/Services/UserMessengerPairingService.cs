@@ -44,9 +44,9 @@ public class UserMessengerPairingService : IUserMessengerPairingService
         _logger = logger;
     }
 
-    public async Task<UserMessengerPairingCode> IssueCodeAsync(string userId, CancellationToken ct = default)
+    public async Task<UserMessengerPairingCode> IssueCodeAsync(string userId, MessengerType type, CancellationToken ct = default)
     {
-        var issued = await _codeStore.IssueAsync(userId, MessengerType.Telegram, ct);
+        var issued = await _codeStore.IssueAsync(userId, type, ct);
 
         _logger.LogInformation(
             "Issued a messenger pairing code for user {UserId}, valid until {ExpiresAt}",
@@ -56,9 +56,9 @@ public class UserMessengerPairingService : IUserMessengerPairingService
         return issued;
     }
 
-    public async Task<UserMessengerPairingCode> IssueAdminInviteAsync(string targetUserId, string issuedByAdminId, CancellationToken ct = default)
+    public async Task<UserMessengerPairingCode> IssueAdminInviteAsync(string targetUserId, string issuedByAdminId, MessengerType type, CancellationToken ct = default)
     {
-        var issued = await _codeStore.IssueAdminInviteAsync(targetUserId, MessengerType.Telegram, issuedByAdminId, ct);
+        var issued = await _codeStore.IssueAdminInviteAsync(targetUserId, type, issuedByAdminId, ct);
 
         _logger.LogInformation(
             "Admin {AdminId} issued a messenger pairing invite for user {UserId}, valid until {ExpiresAt}",

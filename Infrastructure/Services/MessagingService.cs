@@ -12,6 +12,7 @@
 /// <param name="_settingsReader">Reader for the configurable broadcast pacing interval</param>
 /// <param name="_ownerMessengerReader">Second source of known inbound senders, next to MessengerContact</param>
 /// <param name="_userMessengerContactRepository">Third source of known inbound senders: the application users who paired a channel</param>
+/// <param name="_appUserDirectoryReader">Resolves a paired application user's real name for display, given the matched UserMessengerContact</param>
 /// <param name="_inboundObservers">Anyone in the host who wants to hear that a known user answered; empty is a valid state</param>
 /// <param name="_logSuppressionCache">Keeps a discarded sender from being logged on every message</param>
 /// <param name="_logger">Logger instance</param>
@@ -36,6 +37,7 @@ public class MessagingService : IMessagingService
     private readonly IMessengerContactRepository _messengerContactRepository;
     private readonly IOwnerMessengerReader _ownerMessengerReader;
     private readonly IUserMessengerContactRepository _userMessengerContactRepository;
+    private readonly IAppUserDirectoryReader _appUserDirectoryReader;
     private readonly IEnumerable<IInboundMessengerObserver> _inboundObservers;
     private readonly IMemoryCache _logSuppressionCache;
     private readonly IClientGroupReader _clientGroupReader;
@@ -52,6 +54,7 @@ public class MessagingService : IMessagingService
         IMessengerContactRepository messengerContactRepository,
         IOwnerMessengerReader ownerMessengerReader,
         IUserMessengerContactRepository userMessengerContactRepository,
+        IAppUserDirectoryReader appUserDirectoryReader,
         IEnumerable<IInboundMessengerObserver> inboundObservers,
         IMemoryCache logSuppressionCache,
         IClientGroupReader clientGroupReader,
@@ -67,6 +70,7 @@ public class MessagingService : IMessagingService
         _messengerContactRepository = messengerContactRepository;
         _ownerMessengerReader = ownerMessengerReader;
         _userMessengerContactRepository = userMessengerContactRepository;
+        _appUserDirectoryReader = appUserDirectoryReader;
         _inboundObservers = inboundObservers;
         _logSuppressionCache = logSuppressionCache;
         _clientGroupReader = clientGroupReader;
@@ -123,6 +127,7 @@ public class MessagingService : IMessagingService
             ProviderId = provider.Id,
             ClientId = await ResolveOutboundClientIdAsync(provider, request.Recipient, ct),
             ExternalMessageId = result.ExternalMessageId ?? string.Empty,
+            SenderDisplayName = request.SenderDisplayName ?? string.Empty,
             Recipient = request.Recipient,
             Content = request.Content,
             ContentType = request.ContentType,
@@ -232,6 +237,7 @@ public class MessagingService : IMessagingService
 
         var contact = await _messengerContactRepository.GetByTypeAndValueAsync(messengerType, incoming.Sender, ct);
         UserMessengerContact? userContact = null;
+        var senderDisplayName = incoming.SenderDisplayName;
 
         if (contact == null)
         {
@@ -243,6 +249,8 @@ public class MessagingService : IMessagingService
                 LogUnknownSenderOnce(provider, incoming.Sender);
                 return null;
             }
+
+            senderDisplayName = await ResolveInternalSenderDisplayNameAsync(isOwner, userContact, ct) ?? incoming.SenderDisplayName;
         }
 
         var message = new Message
@@ -252,7 +260,7 @@ public class MessagingService : IMessagingService
             ClientId = contact?.ClientId,
             ExternalMessageId = incoming.ExternalMessageId,
             Sender = incoming.Sender,
-            SenderDisplayName = incoming.SenderDisplayName,
+            SenderDisplayName = senderDisplayName,
             Content = incoming.Content,
             ContentType = incoming.ContentType,
             MediaUrl = incoming.MediaUrl,
@@ -334,6 +342,34 @@ public class MessagingService : IMessagingService
         return ownerEntries.Any(entry =>
             entry.Type == messengerType
             && string.Equals(entry.Value, sender, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Resolves a real display name for a sender that has no MessengerContact (owner-bridge or
+    /// paired application user), so the raw provider identifier (e.g. a Slack user ID) never has to
+    /// be shown as the sender in the messaging UI. Owner takes priority since an owner entry and a
+    /// paired UserMessengerContact could theoretically both match the same identifier. Returns null,
+    /// not the raw identifier, when nothing resolves, so the caller can fall back to whatever the
+    /// provider itself reported.
+    /// </summary>
+    private async Task<string?> ResolveInternalSenderDisplayNameAsync(bool isOwner, UserMessengerContact? userContact, CancellationToken ct)
+    {
+        if (isOwner)
+        {
+            var ownerName = await _ownerMessengerReader.GetOwnerDisplayNameAsync(ct);
+            if (!string.IsNullOrWhiteSpace(ownerName))
+                return ownerName;
+        }
+
+        if (userContact != null)
+        {
+            var user = await _appUserDirectoryReader.GetUserAsync(userContact.UserId, ct);
+            var name = $"{user?.FirstName} {user?.LastName}".Trim();
+            if (name.Length > 0)
+                return name;
+        }
+
+        return null;
     }
 
     /// <summary>

@@ -18,7 +18,7 @@ using Klacks.Plugin.Messaging.Domain.Models;
 
 namespace Klacks.Plugin.Messaging.Infrastructure.Services.Providers;
 
-public class SlackMessagingProvider : IMessagingProviderAdapter, IInboundMessagePoller
+public class SlackMessagingProvider : IMessagingProviderAdapter, IInboundMessagePoller, IPairingInstructionsProvider
 {
     private readonly HttpClient _httpClient;
     private readonly ILogger<SlackMessagingProvider> _logger;
@@ -134,6 +134,43 @@ public class SlackMessagingProvider : IMessagingProviderAdapter, IInboundMessage
         catch
         {
             return false;
+        }
+    }
+
+    public async Task<string?> BuildPairingInstructionsAsync(string code, string configJson, CancellationToken ct = default)
+    {
+        var config = DeserializeConfig(configJson);
+        if (config == null || string.IsNullOrWhiteSpace(config.BotToken))
+            return null;
+
+        var botName = await ResolveBotNameAsync(config.BotToken, ct);
+        if (string.IsNullOrWhiteSpace(botName))
+            return null;
+
+        return $"Open Slack, find and message the app \"{botName}\" directly, and send it this code: {code}";
+    }
+
+    private async Task<string?> ResolveBotNameAsync(string botToken, CancellationToken ct)
+    {
+        try
+        {
+            using var httpRequest = new HttpRequestMessage(HttpMethod.Post, AuthTestUrl);
+            httpRequest.Headers.Authorization = new AuthenticationHeaderValue(BearerScheme, botToken);
+
+            var response = await _httpClient.SendAsync(httpRequest, ct);
+            if (!response.IsSuccessStatusCode)
+                return null;
+
+            var responseBody = await response.Content.ReadAsStringAsync(ct);
+            var result = JsonSerializer.Deserialize<JsonElement>(responseBody, JsonOptions);
+            if (!result.TryGetProperty(OkProperty, out var ok) || ok.ValueKind != JsonValueKind.True)
+                return null;
+
+            return GetStringProperty(result, UserProperty);
+        }
+        catch
+        {
+            return null;
         }
     }
 

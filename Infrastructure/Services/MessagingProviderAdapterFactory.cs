@@ -5,12 +5,13 @@
 /// </summary>
 /// <param name="providerType">The provider type constant from MessagingConstants</param>
 using Klacks.Plugin.Messaging.Application.Constants;
+using Klacks.Plugin.Messaging.Application.Interfaces;
 using Klacks.Plugin.Messaging.Domain.Interfaces;
 using Klacks.Plugin.Messaging.Infrastructure.Services.Providers;
 
 namespace Klacks.Plugin.Messaging.Infrastructure.Services;
 
-public class MessagingProviderAdapterFactory
+public class MessagingProviderAdapterFactory : IMessagingProviderAdapterFactory
 {
     private readonly IServiceProvider _serviceProvider;
 

@@ -42,6 +42,7 @@ public class MessagingPluginRegistrar : IPluginRegistrar
         services.AddScoped<IOwnerMessengerReader, OwnerMessengerReader>();
         services.AddScoped<IMessagingService, MessagingService>();
         services.AddScoped<MessagingProviderAdapterFactory>();
+        services.AddScoped<IMessagingProviderAdapterFactory>(sp => sp.GetRequiredService<MessagingProviderAdapterFactory>());
 
         services.AddTransient<RateLimitRetryHandler>();
 

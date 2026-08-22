@@ -79,16 +79,24 @@ public class UserMessengerContactController : ControllerBase
 
     /// <summary>
     /// Issues a pairing code for the caller. There is no request body and no user id in the route:
-    /// the only account a code can ever be issued for is the one the token authenticated.
+    /// the only account a code can ever be issued for is the one the token authenticated. Provider is
+    /// optional: with exactly one enabled messaging provider there is nothing to choose between.
     /// </summary>
     [HttpPost("pairing-code")]
-    public async Task<ActionResult<UserMessengerPairingCodeDto>> CreatePairingCode(CancellationToken ct)
+    public async Task<ActionResult<UserMessengerPairingCodeDto>> CreatePairingCode([FromQuery] string? provider, CancellationToken ct)
     {
         var userId = GetCurrentUserId();
         if (userId == null)
             return Unauthorized();
 
-        var issued = await _pairingService.IssueCodeAsync(userId, ct);
+        var resolved = await ResolveEnabledProviderAsync(provider, ct);
+        if (resolved.Error != null)
+            return BadRequest(new { error = resolved.Error });
+
+        if (!Enum.TryParse<MessengerType>(resolved.Provider!.ProviderType, ignoreCase: true, out var messengerType))
+            return BadRequest(new { error = $"Cannot map provider type '{resolved.Provider.ProviderType}' to a messenger type." });
+
+        var issued = await _pairingService.IssueCodeAsync(userId, messengerType, ct);
 
         return Ok(new UserMessengerPairingCodeDto
         {
@@ -99,27 +107,60 @@ public class UserMessengerContactController : ControllerBase
 
     /// <summary>
     /// Admin-initiated exception to the self-only pairing rule: issues an admin-scoped code for a
-    /// different account and emails it as a Telegram deep-link, so an admin can actively nudge a
-    /// user instead of only being able to point them at their own profile. Deliberate trade-off
-    /// against the self-only invariant documented on CreatePairingCode above - Admin-gated and
-    /// logged with the issuing admin's id for that reason.
+    /// different account and emails it with that provider's pairing instructions (a deep link, or
+    /// plain text naming the bot), so an admin can actively nudge a user instead of only being able
+    /// to point them at their own profile. Deliberate trade-off against the self-only invariant
+    /// documented on CreatePairingCode above - Admin-gated and logged with the issuing admin's id for
+    /// that reason. Provider is optional: with exactly one enabled messaging provider there is
+    /// nothing to choose between.
     /// </summary>
     [HttpPost("admin-invite/{userId}")]
     [Authorize(Roles = MessagingConstants.RoleAdmin)]
-    public async Task<ActionResult<object>> SendAdminInvite(string userId, CancellationToken ct)
+    public async Task<ActionResult<object>> SendAdminInvite(string userId, [FromQuery] string? provider, CancellationToken ct)
     {
         var adminId = GetCurrentUserId();
         if (adminId == null)
             return Unauthorized();
 
-        var providers = await _providerRepository.GetEnabledAsync();
-        var telegram = providers.FirstOrDefault(p =>
-            string.Equals(p.ProviderType, MessagingConstants.ProviderTelegram, StringComparison.OrdinalIgnoreCase));
-        if (telegram == null)
-            return BadRequest(new { result = "NoTelegramProvider" });
+        var resolved = await ResolveEnabledProviderAsync(provider, ct);
+        if (resolved.Error != null)
+            return BadRequest(new { result = "NoProviderAvailable", error = resolved.Error });
 
-        var result = await _inviteSendService.SendAsync(userId, adminId, telegram.ConfigJson, ct);
+        var result = await _inviteSendService.SendAsync(userId, adminId, resolved.Provider!.ProviderType, resolved.Provider.ConfigJson, ct);
         return Ok(new { result = result.ToString() });
+    }
+
+    /// <summary>
+    /// Resolves which enabled messaging provider to use: the explicitly requested one (matched by
+    /// Name or ProviderType), or - when none was requested - the sole enabled provider. Zero or
+    /// multiple enabled providers without an explicit choice is reported as an error rather than
+    /// guessed, mirroring the same auto-resolve rule the send_message skill uses.
+    /// </summary>
+    private async Task<(MessagingProvider? Provider, string? Error)> ResolveEnabledProviderAsync(string? requestedProvider, CancellationToken ct)
+    {
+        var enabledProviders = await _providerRepository.GetEnabledAsync();
+
+        if (!string.IsNullOrWhiteSpace(requestedProvider))
+        {
+            var match = enabledProviders.FirstOrDefault(p =>
+                string.Equals(p.Name, requestedProvider, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(p.ProviderType, requestedProvider, StringComparison.OrdinalIgnoreCase));
+
+            return match != null
+                ? (match, null)
+                : (null, $"No enabled messaging provider matches '{requestedProvider}'.");
+        }
+
+        if (enabledProviders.Count == 0)
+            return (null, "No messaging provider is configured and enabled.");
+
+        if (enabledProviders.Count > 1)
+        {
+            var names = string.Join(", ", enabledProviders.Select(p => p.Name));
+            return (null, $"Multiple messaging providers are enabled ({names}). Specify which one to use.");
+        }
+
+        return (enabledProviders[0], null);
     }
 
     [HttpDelete("{id:guid}")]

@@ -19,6 +19,7 @@
 
 using Klacks.Plugin.Contracts;
 using Klacks.Plugin.Contracts.Skills;
+using Klacks.Plugin.Messaging.Application.Constants;
 using Klacks.Plugin.Messaging.Application.Interfaces;
 using Klacks.Plugin.Messaging.Domain.Enums;
 using Klacks.Plugin.Messaging.Domain.Interfaces;
@@ -100,7 +101,13 @@ public class SendMessageSkill : BaseSkillImplementation
 
         if (string.IsNullOrWhiteSpace(provider))
         {
-            return SkillResult.Error("The 'provider' parameter is required when recipientType is 'client'.");
+            var resolved = await ResolveSoleEnabledProviderAsync(cancellationToken);
+            if (resolved.Error != null)
+            {
+                return SkillResult.Error(resolved.Error);
+            }
+
+            provider = resolved.ProviderType!;
         }
 
         var lookup = await ResolveClientRecipientAsync(recipient, provider, cancellationToken);
@@ -126,7 +133,7 @@ public class SendMessageSkill : BaseSkillImplementation
             return SkillResult.Error($"Unknown messaging provider '{provider}'.");
         }
 
-        var request = new SendMessageRequest(lookup.Recipient.Identifier, content, contentType);
+        var request = new SendMessageRequest(lookup.Recipient.Identifier, content, contentType, SenderDisplayName: MessagingConstants.KlacksySenderDisplayName);
         var result = await _messagingService.SendMessageAsync(provider, request, cancellationToken);
 
         if (!result.Success)
@@ -144,6 +151,30 @@ public class SendMessageSkill : BaseSkillImplementation
                 Status = "sent"
             },
             $"Message sent successfully via {provider} to {lookup.Recipient.DisplayName} ({lookup.Recipient.Identifier}).");
+    }
+
+    /// <summary>
+    /// Auto-resolves the provider when the caller omitted it: with exactly one enabled provider there
+    /// is nothing to ask about, so the skill must not force a channel choice the installation cannot
+    /// even offer. Returns the provider's type (e.g. "Slack"), not its admin-assigned Name, matching
+    /// what ProviderToMessengerType and the downstream provider lookup both expect.
+    /// </summary>
+    private async Task<(string? ProviderType, string? Error)> ResolveSoleEnabledProviderAsync(CancellationToken ct)
+    {
+        var enabledProviders = await _providerRepository.GetEnabledAsync();
+
+        if (enabledProviders.Count == 0)
+        {
+            return (null, "No messaging provider is configured and enabled. An admin must set one up under Settings -> Messaging.");
+        }
+
+        if (enabledProviders.Count > 1)
+        {
+            var names = string.Join(", ", enabledProviders.Select(p => p.Name));
+            return (null, $"The 'provider' parameter is required: multiple messaging providers are enabled ({names}). Specify which one to use.");
+        }
+
+        return (enabledProviders[0].ProviderType, null);
     }
 
     private async Task<RecipientLookup> ResolveClientRecipientAsync(string recipient, string provider, CancellationToken ct)
@@ -263,7 +294,7 @@ public class SendMessageSkill : BaseSkillImplementation
             providerName = matchingProvider.Name;
         }
 
-        var request = new SendMessageRequest(channel.Value, content, contentType);
+        var request = new SendMessageRequest(channel.Value, content, contentType, SenderDisplayName: MessagingConstants.KlacksySenderDisplayName);
         var result = await _messagingService.SendMessageAsync(providerName, request, ct);
 
         if (!result.Success)

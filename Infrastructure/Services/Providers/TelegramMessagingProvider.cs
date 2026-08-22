@@ -16,7 +16,7 @@ using Microsoft.Extensions.Caching.Memory;
 
 namespace Klacks.Plugin.Messaging.Infrastructure.Services.Providers;
 
-public class TelegramMessagingProvider : IMessagingProviderAdapter, ITelegramBotMetadataProvider, IWebhookRegistrar
+public class TelegramMessagingProvider : IMessagingProviderAdapter, ITelegramBotMetadataProvider, IWebhookRegistrar, IPairingInstructionsProvider
 {
     private readonly HttpClient _httpClient;
     private readonly IMemoryCache _cache;
@@ -79,6 +79,16 @@ public class TelegramMessagingProvider : IMessagingProviderAdapter, ITelegramBot
             _logger.LogError(ex, "Failed to parse Telegram bot username response");
             return null;
         }
+    }
+
+    public async Task<string?> BuildPairingInstructionsAsync(string code, string configJson, CancellationToken ct = default)
+    {
+        var botUsername = await GetBotUsernameAsync(configJson, ct);
+        if (string.IsNullOrWhiteSpace(botUsername))
+            return null;
+
+        var deepLink = $"https://t.me/{botUsername}?start={code}";
+        return $"Open this link on your phone and press START in Telegram:\n{deepLink}";
     }
 
     private static string BuildBotUsernameCacheKey(string botToken)

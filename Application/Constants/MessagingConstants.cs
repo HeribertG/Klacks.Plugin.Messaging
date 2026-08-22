@@ -70,4 +70,10 @@ public static class MessagingConstants
     /// </summary>
     public const string StructuredActionsUnsupportedErrorFormat =
         "Provider '{0}' cannot carry structured actions: the recipient would have no way to answer";
+
+    /// <summary>
+    /// Sender display name recorded for every message sent via SendMessageSkill, so the messaging UI
+    /// can show who actually wrote an outbound message instead of the raw recipient identifier.
+    /// </summary>
+    public const string KlacksySenderDisplayName = "Klacksy";
 }
