@@ -58,7 +58,7 @@ public class MessagingController : ControllerBase
     }
 
     [HttpPost("providers")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = MessagingConstants.RoleAdmin)]
     public async Task<ActionResult<MessagingProviderDto>> CreateProvider([FromBody] CreateMessagingProviderDto dto)
     {
         var existing = await _providerRepository.GetByNameAsync(dto.Name);
@@ -86,7 +86,7 @@ public class MessagingController : ControllerBase
     }
 
     [HttpPut("providers/{id:guid}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = MessagingConstants.RoleAdmin)]
     public async Task<ActionResult<MessagingProviderDto>> UpdateProvider(Guid id, [FromBody] CreateMessagingProviderDto dto)
     {
         var provider = await _providerRepository.GetByIdAsync(id);
@@ -119,7 +119,7 @@ public class MessagingController : ControllerBase
         => isEnabled && string.Equals(providerType, MessagingConstants.ProviderTelegram, StringComparison.OrdinalIgnoreCase);
 
     [HttpDelete("providers/{id:guid}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = MessagingConstants.RoleAdmin)]
     public async Task<IActionResult> DeleteProvider(Guid id)
     {
         await _providerRepository.DeleteAsync(id);
@@ -128,7 +128,7 @@ public class MessagingController : ControllerBase
     }
 
     [HttpPost("providers/{id:guid}/test")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = MessagingConstants.RoleAdmin)]
     public async Task<ActionResult<object>> TestProvider(Guid id)
     {
         var success = await _messagingService.TestProviderAsync(id);

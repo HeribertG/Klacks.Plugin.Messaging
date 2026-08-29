@@ -29,6 +29,15 @@ public static class MessagingConstants
     public const string ProviderSlack = "Slack";
 
     public const int DefaultRetentionCount = 1000;
+
+    /// <summary>
+    /// Bounds for the message list page size; requests outside the bounds are clamped so a caller
+    /// cannot pull the whole message store in one query.
+    /// </summary>
+    public const int MinMessageQueryCount = 1;
+
+    public const int MaxMessageQueryCount = 200;
+
     public const string DefaultContentType = "text";
 
     public const string SettingRetentionCount = "MESSAGE_RETENTION_COUNT";

@@ -46,7 +46,7 @@ public class OwnerMessengerController : ControllerBase
     }
 
     [HttpPut]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = MessagingConstants.RoleAdmin)]
     public async Task<ActionResult<IReadOnlyList<OwnerMessengerEntry>>> Put([FromBody] List<OwnerMessengerEntry> entries, CancellationToken ct)
     {
         var sanitized = entries

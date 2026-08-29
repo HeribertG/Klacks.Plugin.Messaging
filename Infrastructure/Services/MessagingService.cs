@@ -167,6 +167,8 @@ public class MessagingService : IMessagingService
         int offset = 0,
         CancellationToken ct = default)
     {
+        count = Math.Clamp(count, MessagingConstants.MinMessageQueryCount, MessagingConstants.MaxMessageQueryCount);
+        offset = Math.Max(offset, 0);
         return await _messageRepository.GetMessagesAsync(providerId, direction, sender, scope, count, offset);
     }
 

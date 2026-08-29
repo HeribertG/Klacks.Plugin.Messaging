@@ -13,6 +13,7 @@ using Klacks.Plugin.Messaging.Application.Interfaces;
 using Klacks.Plugin.Messaging.Domain.Interfaces;
 using Klacks.Plugin.Messaging.Infrastructure.Http;
 using Klacks.Plugin.Messaging.Infrastructure.Persistence.Configurations;
+using Klacks.Plugin.Messaging.Infrastructure.Persistence.Encryption;
 using Klacks.Plugin.Messaging.Infrastructure.Repositories;
 using Klacks.Plugin.Messaging.Application.Services;
 using Klacks.Plugin.Messaging.Infrastructure.Services;
@@ -33,6 +34,7 @@ public class MessagingPluginRegistrar : IPluginRegistrar
 
     public void RegisterServices(IServiceCollection services, IConfiguration configuration)
     {
+        services.AddHostedService<MessagingEncryptionInitializer>();
         services.AddMemoryCache();
         services.AddScoped<IMessageRepository, MessageRepository>();
         services.AddScoped<IMessagingProviderRepository, MessagingProviderRepository>();

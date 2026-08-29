@@ -1,9 +1,11 @@
 // Copyright (c) Heribert Gasparoli Private. All rights reserved.
 
 /// <summary>
-/// EF Core configuration for the MessagingProvider entity with unique name index and property constraints.
+/// EF Core configuration for the MessagingProvider entity with unique name index, property
+/// constraints and at-rest encryption of ConfigJson and WebhookSecret.
 /// </summary>
 using Klacks.Plugin.Messaging.Domain.Models;
+using Klacks.Plugin.Messaging.Infrastructure.Persistence.Encryption;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -18,7 +20,7 @@ public class MessagingProviderConfiguration : IEntityTypeConfiguration<Messaging
         builder.HasIndex(p => p.Name).IsUnique();
         builder.Property(p => p.DisplayName).HasMaxLength(200).IsRequired();
         builder.Property(p => p.ProviderType).HasMaxLength(50).IsRequired();
-        builder.Property(p => p.ConfigJson).IsRequired();
-        builder.Property(p => p.WebhookSecret).HasMaxLength(256);
+        builder.Property(p => p.ConfigJson).HasConversion(new EncryptedStringConverter()).IsRequired();
+        builder.Property(p => p.WebhookSecret).HasConversion(new EncryptedStringConverter()).HasMaxLength(256);
     }
 }

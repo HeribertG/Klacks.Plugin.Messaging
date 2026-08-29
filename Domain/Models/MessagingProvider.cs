@@ -7,7 +7,8 @@
 /// <param name="Name">Internal name used for lookups</param>
 /// <param name="DisplayName">Human-readable name shown in the UI</param>
 /// <param name="ProviderType">Type identifier for the provider implementation</param>
-/// <param name="ConfigJson">Encrypted JSON containing provider-specific settings</param>
+/// <param name="ConfigJson">Provider-specific settings as JSON; encrypted at rest via an EF Core value converter</param>
+/// <param name="WebhookSecret">Server-generated secret for webhook validation; encrypted at rest via an EF Core value converter</param>
 using System.ComponentModel.DataAnnotations;
 
 namespace Klacks.Plugin.Messaging.Domain.Models;
