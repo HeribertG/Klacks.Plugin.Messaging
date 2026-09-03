@@ -5,6 +5,7 @@
 /// Implements IPluginRegistrar for discovery by the host application.
 /// </summary>
 
+using System.Linq;
 using System.Reflection;
 using System.Threading.RateLimiting;
 using Klacks.Plugin.Contracts;
@@ -125,6 +126,15 @@ public class MessagingPluginRegistrar : IPluginRegistrar
     /// </summary>
     private static void AddWebhookRateLimiting(IServiceCollection services, IConfiguration configuration)
     {
+        // Guard on the IServiceCollection itself (not a static/process-wide flag) so repeated
+        // registration against the SAME collection stays idempotent (AddPolicy throws if a policy
+        // with the same name already exists), while separate collections - e.g. distinct
+        // WebApplicationFactory hosts in the same test process - each still get their own policy.
+        if (services.Any(descriptor => descriptor.ServiceType == typeof(WebhookRateLimitingRegisteredMarker)))
+            return;
+
+        services.AddSingleton<WebhookRateLimitingRegisteredMarker>();
+
         var permitLimit = configuration.GetValue(
             MessagingRateLimitConstants.SettingWebhookPermitLimit,
             MessagingRateLimitConstants.DefaultWebhookPermitLimit);
@@ -138,5 +148,9 @@ public class MessagingPluginRegistrar : IPluginRegistrar
                         PermitLimit = permitLimit,
                         Window = MessagingRateLimitConstants.WebhookRateLimitWindow
                     })));
+    }
+
+    private sealed class WebhookRateLimitingRegisteredMarker
+    {
     }
 }
