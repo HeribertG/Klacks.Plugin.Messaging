@@ -3,3 +3,7 @@ obj/
 *.user
 *.suo
 .vs/
+/.build-etappe5a/Debug/net10.0/Klacks.Plugin.Contracts.dll
+/.build-etappe5a/Debug/net10.0
+/obj-gaps
+/server.pid
