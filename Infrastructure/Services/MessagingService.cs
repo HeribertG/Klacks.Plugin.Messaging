@@ -14,6 +14,7 @@
 /// <param name="_userMessengerContactRepository">Third source of known inbound senders: the application users who paired a channel</param>
 /// <param name="_appUserDirectoryReader">Resolves a paired application user's real name for display, given the matched UserMessengerContact</param>
 /// <param name="_inboundObservers">Anyone in the host who wants to hear that a known user answered; empty is a valid state</param>
+/// <param name="_clientMessengerObservers">Anyone in the host who wants to hear that a known client sent a message; empty is a valid state</param>
 /// <param name="_logSuppressionCache">Keeps a discarded sender from being logged on every message</param>
 /// <param name="_logger">Logger instance</param>
 using System.Globalization;
@@ -39,6 +40,7 @@ public class MessagingService : IMessagingService
     private readonly IUserMessengerContactRepository _userMessengerContactRepository;
     private readonly IAppUserDirectoryReader _appUserDirectoryReader;
     private readonly IEnumerable<IInboundMessengerObserver> _inboundObservers;
+    private readonly IEnumerable<IInboundClientMessengerObserver> _clientMessengerObservers;
     private readonly IMemoryCache _logSuppressionCache;
     private readonly IClientGroupReader _clientGroupReader;
     private readonly IClientIdNumberReader _clientIdNumberReader;
@@ -56,6 +58,7 @@ public class MessagingService : IMessagingService
         IUserMessengerContactRepository userMessengerContactRepository,
         IAppUserDirectoryReader appUserDirectoryReader,
         IEnumerable<IInboundMessengerObserver> inboundObservers,
+        IEnumerable<IInboundClientMessengerObserver> clientMessengerObservers,
         IMemoryCache logSuppressionCache,
         IClientGroupReader clientGroupReader,
         IClientIdNumberReader clientIdNumberReader,
@@ -72,6 +75,7 @@ public class MessagingService : IMessagingService
         _userMessengerContactRepository = userMessengerContactRepository;
         _appUserDirectoryReader = appUserDirectoryReader;
         _inboundObservers = inboundObservers;
+        _clientMessengerObservers = clientMessengerObservers;
         _logSuppressionCache = logSuppressionCache;
         _clientGroupReader = clientGroupReader;
         _clientIdNumberReader = clientIdNumberReader;
@@ -278,6 +282,11 @@ public class MessagingService : IMessagingService
 
         await NotifyInboundObserversAsync(message, messengerType, userContact, ct);
 
+        if (contact != null)
+        {
+            await NotifyClientMessengerObserversAsync(message, messengerType, ct);
+        }
+
         return message;
     }
 
@@ -317,6 +326,42 @@ public class MessagingService : IMessagingService
                 _logger.LogError(
                     ex,
                     "Inbound message observer {Observer} failed for message {MessageId}",
+                    observer.GetType().Name,
+                    message.Id);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Tells the host that a message from a known CLIENT arrived. Parallel to
+    /// NotifyInboundObserversAsync but never overlapping with it: a message resolves to a
+    /// MessengerContact (client) or a UserMessengerContact (app user), never both, so exactly one of
+    /// the two notification paths fires per inbound message. Same error-handling shape as its
+    /// user-side counterpart: runs after the commit, and a throwing observer is logged and skipped
+    /// rather than allowed to undo the already-persisted message or block the remaining observers.
+    /// </summary>
+    private async Task NotifyClientMessengerObserversAsync(Message message, MessengerType messengerType, CancellationToken ct)
+    {
+        var notification = new InboundClientMessengerMessage(
+            message.Id,
+            message.ClientId!.Value,
+            messengerType.ToString(),
+            message.Sender,
+            message.SenderDisplayName,
+            message.Content,
+            message.Timestamp);
+
+        foreach (var observer in _clientMessengerObservers)
+        {
+            try
+            {
+                await observer.OnInboundMessageAsync(notification, ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Client messenger observer {Observer} failed for message {MessageId}",
                     observer.GetType().Name,
                     message.Id);
             }
