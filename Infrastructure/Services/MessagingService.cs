@@ -281,11 +281,7 @@ public class MessagingService : IMessagingService
         _logger.LogInformation("Processed incoming message {MessageId} from provider {Provider}", message.Id, provider.Name);
 
         await NotifyInboundObserversAsync(message, messengerType, userContact, ct);
-
-        if (contact != null)
-        {
-            await NotifyClientMessengerObserversAsync(message, messengerType, ct);
-        }
+        await NotifyClientMessengerObserversAsync(message, messengerType, ct);
 
         return message;
     }
@@ -342,9 +338,12 @@ public class MessagingService : IMessagingService
     /// </summary>
     private async Task NotifyClientMessengerObserversAsync(Message message, MessengerType messengerType, CancellationToken ct)
     {
+        if (message.ClientId == null)
+            return;
+
         var notification = new InboundClientMessengerMessage(
             message.Id,
-            message.ClientId!.Value,
+            message.ClientId.Value,
             messengerType.ToString(),
             message.Sender,
             message.SenderDisplayName,
