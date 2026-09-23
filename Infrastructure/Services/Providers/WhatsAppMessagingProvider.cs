@@ -17,7 +17,7 @@ using Klacks.Plugin.Messaging.Domain.Models;
 
 namespace Klacks.Plugin.Messaging.Infrastructure.Services.Providers;
 
-public class WhatsAppMessagingProvider : IMessagingProviderAdapter, IWebhookSubscriptionVerifier
+public partial class WhatsAppMessagingProvider : IMessagingProviderAdapter, IWebhookSubscriptionVerifier
 {
     private readonly HttpClient _httpClient;
     private readonly ILogger<WhatsAppMessagingProvider> _logger;

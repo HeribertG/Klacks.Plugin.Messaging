@@ -16,7 +16,7 @@ using Microsoft.Extensions.Caching.Memory;
 
 namespace Klacks.Plugin.Messaging.Infrastructure.Services.Providers;
 
-public class TelegramMessagingProvider : IMessagingProviderAdapter, ITelegramBotMetadataProvider, IWebhookRegistrar, IPairingInstructionsProvider
+public partial class TelegramMessagingProvider : IMessagingProviderAdapter, ITelegramBotMetadataProvider, IWebhookRegistrar, IPairingInstructionsProvider
 {
     private readonly HttpClient _httpClient;
     private readonly IMemoryCache _cache;

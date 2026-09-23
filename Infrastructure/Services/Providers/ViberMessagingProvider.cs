@@ -19,7 +19,7 @@ using Klacks.Plugin.Messaging.Domain.Models;
 
 namespace Klacks.Plugin.Messaging.Infrastructure.Services.Providers;
 
-public class ViberMessagingProvider : IMessagingProviderAdapter, IWebhookRegistrar
+public partial class ViberMessagingProvider : IMessagingProviderAdapter, IWebhookRegistrar
 {
     private readonly HttpClient _httpClient;
     private readonly ILogger<ViberMessagingProvider> _logger;

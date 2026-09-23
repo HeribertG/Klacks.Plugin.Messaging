@@ -18,7 +18,7 @@ using Klacks.Plugin.Messaging.Domain.Models;
 
 namespace Klacks.Plugin.Messaging.Infrastructure.Services.Providers;
 
-public class SlackMessagingProvider : IMessagingProviderAdapter, IInboundMessagePoller, IPairingInstructionsProvider
+public partial class SlackMessagingProvider : IMessagingProviderAdapter, IInboundMessagePoller, IPairingInstructionsProvider
 {
     private readonly HttpClient _httpClient;
     private readonly ILogger<SlackMessagingProvider> _logger;

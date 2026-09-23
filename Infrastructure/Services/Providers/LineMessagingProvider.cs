@@ -19,7 +19,7 @@ using Klacks.Plugin.Messaging.Domain.Models;
 
 namespace Klacks.Plugin.Messaging.Infrastructure.Services.Providers;
 
-public class LineMessagingProvider : IMessagingProviderAdapter
+public partial class LineMessagingProvider : IMessagingProviderAdapter
 {
     private readonly HttpClient _httpClient;
     private readonly ILogger<LineMessagingProvider> _logger;
