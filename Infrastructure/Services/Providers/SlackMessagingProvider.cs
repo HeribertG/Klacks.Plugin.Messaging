@@ -13,6 +13,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Klacks.Plugin.Messaging.Application.Constants;
+using Klacks.Plugin.Messaging.Application.Services;
 using Klacks.Plugin.Messaging.Domain.Interfaces;
 using Klacks.Plugin.Messaging.Domain.Models;
 
@@ -28,7 +29,6 @@ public partial class SlackMessagingProvider : IMessagingProviderAdapter, IInboun
     private const string ConversationsHistoryUrl = "https://slack.com/api/conversations.history";
     private const string MessagesProperty = "messages";
     private const int MaxMessagesPerPoll = 100;
-    private const char ChannelNamePrefix = '#';
     private const string BearerScheme = "Bearer";
     private const string JsonContentType = "application/json";
     private const string SignatureHeader = "X-Slack-Signature";
@@ -368,20 +368,7 @@ public partial class SlackMessagingProvider : IMessagingProviderAdapter, IInboun
 
     private static string? ResolveChannelId(SlackConfig? config)
     {
-        if (config == null)
-        {
-            return null;
-        }
-
-        if (!string.IsNullOrWhiteSpace(config.ChannelId))
-        {
-            return config.ChannelId.Trim();
-        }
-
-        // conversations.history only accepts an ID. A '#name' in DefaultChannel would need
-        // channels:read to resolve, which the send-only scope set does not include.
-        var fallback = config.DefaultChannel.Trim();
-        return fallback.Length > 0 && fallback[0] != ChannelNamePrefix ? fallback : null;
+        return config == null ? null : SlackPollingChannel.Resolve(config.ChannelId, config.DefaultChannel);
     }
 
     private static string FormatCursor(DateTimeOffset moment)

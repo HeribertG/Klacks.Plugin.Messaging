@@ -83,6 +83,15 @@ public class MessengerContactRepository : IMessengerContactRepository
             .FirstOrDefaultAsync(ct);
     }
 
+    public async Task<int> CountByTypeAsync(MessengerType type, CancellationToken ct = default)
+    {
+        return await _context.Set<MessengerContact>()
+            .Where(c => c.Type == type && !c.IsDeleted)
+            .Select(c => c.ClientId)
+            .Distinct()
+            .CountAsync(ct);
+    }
+
     public async Task AddAsync(MessengerContact contact, CancellationToken ct = default)
     {
         await _context.Set<MessengerContact>().AddAsync(contact, ct);

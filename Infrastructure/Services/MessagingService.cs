@@ -16,6 +16,7 @@
 /// <param name="_inboundObservers">Anyone in the host who wants to hear that a known user answered; empty is a valid state</param>
 /// <param name="_clientMessengerObservers">Anyone in the host who wants to hear that a known client sent a message; empty is a valid state</param>
 /// <param name="_logSuppressionCache">Keeps a discarded sender from being logged on every message</param>
+/// <param name="_activityTracker">Records webhook hits, signature rejections and unknown senders for the setup diagnosis</param>
 /// <param name="_logger">Logger instance</param>
 using System.Globalization;
 using Klacks.Plugin.Contracts;
@@ -48,6 +49,7 @@ public class MessagingService : IMessagingService
     private readonly IPluginUnitOfWork _unitOfWork;
     private readonly IPluginSettingsReader _settingsReader;
     private readonly MessagingProviderAdapterFactory _adapterFactory;
+    private readonly IMessagingInboundActivityTracker _activityTracker;
     private readonly ILogger<MessagingService> _logger;
 
     public MessagingService(
@@ -66,6 +68,7 @@ public class MessagingService : IMessagingService
         IPluginUnitOfWork unitOfWork,
         IPluginSettingsReader settingsReader,
         MessagingProviderAdapterFactory adapterFactory,
+        IMessagingInboundActivityTracker activityTracker,
         ILogger<MessagingService> logger)
     {
         _providerRepository = providerRepository;
@@ -83,6 +86,7 @@ public class MessagingService : IMessagingService
         _unitOfWork = unitOfWork;
         _settingsReader = settingsReader;
         _adapterFactory = adapterFactory;
+        _activityTracker = activityTracker;
         _logger = logger;
     }
 
@@ -190,8 +194,7 @@ public class MessagingService : IMessagingService
 
         var adapter = _adapterFactory.Create(provider.ProviderType);
 
-        var context = new WebhookValidationContext(body, headers, provider.ConfigJson, provider.WebhookSecret);
-        var validationResult = adapter.ValidateWebhook(context);
+        var validationResult = ValidateAndTrackWebhook(provider, adapter, body, headers);
         if (!validationResult.IsValid)
             throw new UnauthorizedAccessException($"Webhook validation failed for provider '{providerName}'");
 
@@ -207,6 +210,33 @@ public class MessagingService : IMessagingService
 
         var message = await PersistInboundAsync(provider, incoming, ct);
         return message == null ? new WebhookProcessingResult() : new WebhookProcessingResult(message);
+    }
+
+    public async Task<bool> AuthenticateWebhookAsync(string providerName, string body, IReadOnlyDictionary<string, string> headers, CancellationToken ct = default)
+    {
+        var provider = await ResolveProviderAsync(providerName);
+        if (provider == null || !provider.IsEnabled)
+        {
+            _logger.LogWarning("Rejected webhook authentication for unknown or disabled provider '{Provider}'", providerName);
+            return false;
+        }
+
+        var adapter = _adapterFactory.Create(provider.ProviderType);
+        return ValidateAndTrackWebhook(provider, adapter, body, headers).IsValid;
+    }
+
+    private WebhookValidationResult ValidateAndTrackWebhook(
+        MessagingProvider provider, IMessagingProviderAdapter adapter, string body, IReadOnlyDictionary<string, string> headers)
+    {
+        var context = new WebhookValidationContext(body, headers, provider.ConfigJson, provider.WebhookSecret);
+        var validationResult = adapter.ValidateWebhook(context);
+
+        if (validationResult.IsValid)
+            _activityTracker.RecordWebhookHit(provider.Id);
+        else
+            _activityTracker.RecordSignatureRejection(provider.Id);
+
+        return validationResult;
     }
 
     public async Task<Message?> IngestInboundMessageAsync(string providerName, IncomingMessage incoming, CancellationToken ct = default)
@@ -252,6 +282,7 @@ public class MessagingService : IMessagingService
 
             if (!isOwner && userContact == null)
             {
+                _activityTracker.RecordUnknownSender(provider.Id, incoming.Sender, incoming.SenderDisplayName);
                 LogUnknownSenderOnce(provider, incoming.Sender);
                 return null;
             }
@@ -451,7 +482,14 @@ public class MessagingService : IMessagingService
         if (adapter is not IWebhookSubscriptionVerifier verifier)
             return null;
 
-        return verifier.VerifySubscription(provider.ConfigJson, verifyToken ?? string.Empty) ? challenge : null;
+        if (!verifier.VerifySubscription(provider.ConfigJson, verifyToken ?? string.Empty))
+        {
+            _activityTracker.RecordSignatureRejection(provider.Id);
+            return null;
+        }
+
+        _activityTracker.RecordWebhookHit(provider.Id);
+        return challenge;
     }
 
     public async Task<bool> TestProviderAsync(Guid providerId, CancellationToken ct = default)

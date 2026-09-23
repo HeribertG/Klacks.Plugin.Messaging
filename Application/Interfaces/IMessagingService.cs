@@ -32,6 +32,14 @@ public interface IMessagingService
     Task<WebhookProcessingResult> ProcessIncomingMessageAsync(string providerName, string body, IReadOnlyDictionary<string, string> headers, CancellationToken ct = default);
 
     /// <summary>
+    /// Authenticates a webhook request exactly like ProcessIncomingMessageAsync does - provider resolved by
+    /// name, then by the first enabled provider of that type; an unknown or disabled provider is rejected -
+    /// without parsing or persisting anything. For paths that act on the payload themselves, such as the
+    /// Telegram /start onboarding command. Records a webhook hit or a signature rejection.
+    /// </summary>
+    Task<bool> AuthenticateWebhookAsync(string providerName, string body, IReadOnlyDictionary<string, string> headers, CancellationToken ct = default);
+
+    /// <summary>
     /// Persists one already-parsed inbound message. Shared by the webhook route and the poller so
     /// both produce identical rows. Returns null when the provider is unknown or the message was
     /// already stored - a poll cursor that slips would otherwise replay messages, and each replay

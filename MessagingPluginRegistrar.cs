@@ -17,6 +17,7 @@ using Klacks.Plugin.Messaging.Infrastructure.Persistence.Configurations;
 using Klacks.Plugin.Messaging.Infrastructure.Persistence.Encryption;
 using Klacks.Plugin.Messaging.Infrastructure.Repositories;
 using Klacks.Plugin.Messaging.Application.Services;
+using Klacks.Plugin.Messaging.Application.Services.Setup;
 using Klacks.Plugin.Messaging.Infrastructure.Services;
 using Klacks.Plugin.Messaging.Infrastructure.Services.Providers;
 using Klacks.Plugin.Messaging.Skills;
@@ -43,9 +44,11 @@ public class MessagingPluginRegistrar : IPluginRegistrar
         services.AddScoped<IUserMessengerContactRepository, UserMessengerContactRepository>();
         services.AddScoped<ITelegramOnboardingTokenRepository, TelegramOnboardingTokenRepository>();
         services.AddScoped<IOwnerMessengerReader, OwnerMessengerReader>();
+        services.AddSingleton<IMessagingInboundActivityTracker>(_ => new MessagingInboundActivityTracker());
         services.AddScoped<IMessagingService, MessagingService>();
         services.AddScoped<MessagingProviderAdapterFactory>();
         services.AddScoped<IMessagingProviderAdapterFactory>(sp => sp.GetRequiredService<MessagingProviderAdapterFactory>());
+        services.AddScoped<IMessagingSetupDiagnosticsService, MessagingSetupDiagnosticsService>();
 
         services.AddTransient<RateLimitRetryHandler>();
 
@@ -74,6 +77,7 @@ public class MessagingPluginRegistrar : IPluginRegistrar
         services.AddScoped<SendMessageSkill>();
         services.AddScoped<ReadMessagesSkill>();
         services.AddScoped<ListMessagingProvidersSkill>();
+        services.AddScoped<DiagnoseMessagingSetupSkill>();
 
         services.AddScoped<IPluginOperationalCheck, MessagingOperationalCheck>();
 

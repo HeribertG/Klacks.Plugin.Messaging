@@ -2,7 +2,9 @@
 
 /// <summary>
 /// Webhook endpoint for receiving incoming messages from external messaging providers.
-/// Handles webhook verification and incoming message processing.
+/// Handles webhook verification and incoming message processing. A Telegram /start onboarding command
+/// never reaches ProcessIncomingMessageAsync, so it is authenticated through
+/// IMessagingService.AuthenticateWebhookAsync before any onboarding or pairing code is redeemed.
 /// </summary>
 using System.Text.Json;
 using Klacks.Plugin.Contracts;
@@ -15,6 +17,7 @@ using Klacks.Plugin.Messaging.Domain.Interfaces;
 using Klacks.Plugin.Messaging.Domain.Models;
 using Klacks.Plugin.Messaging.Infrastructure.Services.Providers;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 
@@ -63,11 +66,14 @@ public class MessagingWebhookController : ControllerBase
             h => h.Value.ToString(),
             StringComparer.OrdinalIgnoreCase);
 
-        if (string.Equals(providerName, MessagingConstants.ProviderTelegram, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(providerName, MessagingConstants.ProviderTelegram, StringComparison.OrdinalIgnoreCase)
+            && TryExtractStartCommand(body, out var startToken, out var startChatId))
         {
-            var redeemed = await TryHandleStartCommandAsync(body, HttpContext.RequestAborted);
-            if (redeemed)
-                return Ok();
+            if (!await _messagingService.AuthenticateWebhookAsync(providerName, body, headers, HttpContext.RequestAborted))
+                return Unauthorized();
+
+            await RedeemStartCommandAsync(startToken, startChatId, HttpContext.RequestAborted);
+            return Ok();
         }
 
         try
@@ -121,7 +127,7 @@ public class MessagingWebhookController : ControllerBase
 
         var response = await _messagingService.VerifySubscriptionChallengeAsync(providerName, verifyToken, challenge);
         if (response == null)
-            return Forbid();
+            return StatusCode(StatusCodes.Status403Forbidden);
 
         return Ok(response);
     }
@@ -130,15 +136,9 @@ public class MessagingWebhookController : ControllerBase
     /// One /start command now carries two kinds of code: the employee invitation token and the
     /// pairing code an application user issued for themselves. The employee token is tried first and
     /// its behaviour is untouched; only a token no invitation knows is offered to the pairing store.
-    /// The method keeps returning true in every case a /start was recognised, exactly as before -
-    /// falling through on an unknown code would newly route it into ProcessIncomingMessageAsync and
-    /// change a path that works today, for no gain.
     /// </summary>
-    private async Task<bool> TryHandleStartCommandAsync(string body, CancellationToken ct)
+    private async Task RedeemStartCommandAsync(string token, string chatId, CancellationToken ct)
     {
-        if (!TryExtractStartCommand(body, out var token, out var chatId))
-            return false;
-
         var result = await _redemptionService.RedeemAsync(token, chatId, ct);
 
         if (result == OnboardingRedeemResult.TokenNotFound)
@@ -148,14 +148,13 @@ public class MessagingWebhookController : ControllerBase
                 "User messenger pairing result {Result} for chat {ChatId}",
                 pairingResult,
                 chatId);
-            return true;
+            return;
         }
 
         _logger.LogInformation(
             "Telegram onboarding redemption result {Result} for chat {ChatId}",
             result,
             chatId);
-        return true;
     }
 
     private bool TryExtractStartCommand(string body, out string token, out string chatId)
