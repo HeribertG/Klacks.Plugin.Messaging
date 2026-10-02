@@ -6,6 +6,8 @@
 /// Only statuses that guarantee the request was not acted upon are retried (429, 503),
 /// because outbound messages carry no idempotency key and a retry of an accepted request
 /// would deliver the message twice.
+/// Only the host is logged: Telegram carries the bot token in the path and WeChat its secret and
+/// access token in the query, and these warnings reach production logs.
 /// </summary>
 /// <param name="logger">Logger instance</param>
 using System.Net;
@@ -36,15 +38,15 @@ public class RateLimitRetryHandler : DelegatingHandler
             if (delay == null)
             {
                 _logger.LogWarning(
-                    "Provider request to {Uri} throttled with {StatusCode}, but the requested wait exceeds the allowed maximum. Giving up.",
-                    request.RequestUri,
+                    "Provider request to {Host} throttled with {StatusCode}, but the requested wait exceeds the allowed maximum. Giving up.",
+                    request.RequestUri?.Host,
                     (int)response.StatusCode);
                 return response;
             }
 
             _logger.LogWarning(
-                "Provider request to {Uri} throttled with {StatusCode}. Retrying in {Delay}ms (attempt {Attempt}/{MaxAttempts}).",
-                request.RequestUri,
+                "Provider request to {Host} throttled with {StatusCode}. Retrying in {Delay}ms (attempt {Attempt}/{MaxAttempts}).",
+                request.RequestUri?.Host,
                 (int)response.StatusCode,
                 delay.Value.TotalMilliseconds,
                 attempt,
@@ -60,8 +62,8 @@ public class RateLimitRetryHandler : DelegatingHandler
         if (IsRetryable(response.StatusCode))
         {
             _logger.LogError(
-                "Provider request to {Uri} still throttled with {StatusCode} after {MaxAttempts} retries.",
-                request.RequestUri,
+                "Provider request to {Host} still throttled with {StatusCode} after {MaxAttempts} retries.",
+                request.RequestUri?.Host,
                 (int)response.StatusCode,
                 MessagingRateLimitConstants.MaxRetryAttempts);
         }
