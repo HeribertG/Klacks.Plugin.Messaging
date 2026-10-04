@@ -15,6 +15,13 @@ public static class MessagingConstants
     /// </summary>
     public const string RoleAdmin = "Admin";
 
+    /// <summary>
+    /// Supervisor role claim the host issues; together with RoleAdmin it may edit client data.
+    /// </summary>
+    public const string RoleSupervisor = "Authorised";
+
+    public const string RolesClientEditors = RoleAdmin + "," + RoleSupervisor;
+
     public const string ProviderWhatsApp = "WhatsApp";
     public const string ProviderTelegram = "Telegram";
     public const string ProviderSignal = "Signal";
