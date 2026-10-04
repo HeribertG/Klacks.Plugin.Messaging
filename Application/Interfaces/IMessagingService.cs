@@ -55,6 +55,24 @@ public interface IMessagingService
 
     Task<BroadcastSendResult> SendBroadcastAsync(string providerName, Guid groupId, string content, string contentType = "text", CancellationToken ct = default);
 
+    /// <summary>
+    /// Previews a broadcast to an explicit client list, answered like an empty group when the list is empty.
+    /// Lets a caller narrow the audience (e.g. to the clients it may see) before anything is resolved.
+    /// </summary>
+    Task<BroadcastPreview> PreviewBroadcastToClientsAsync(string providerName, IReadOnlyCollection<Guid> clientIds, CancellationToken ct = default);
+
+    /// <summary>
+    /// Sends a broadcast to an explicit client list. An empty list fails with emptyAudienceError, so a narrowed
+    /// audience answers exactly like the unnarrowed route would for an empty group or unknown id numbers.
+    /// </summary>
+    Task<BroadcastSendResult> SendBroadcastToClientsAsync(string providerName, IReadOnlyCollection<Guid> clientIds, string content, string contentType, string emptyAudienceError, CancellationToken ct = default);
+
+    /// <summary>
+    /// The client a recipient address belongs to, resolved with the same provider lookup and messenger-contact
+    /// match the send path uses to attribute the outbound message; null when no contact matches.
+    /// </summary>
+    Task<Guid?> ResolveRecipientClientIdAsync(string providerName, string recipient, CancellationToken ct = default);
+
     Task<BroadcastPreview> PreviewBroadcastToIdNumbersAsync(string providerName, IReadOnlyCollection<int> idNumbers, CancellationToken ct = default);
 
     Task<BroadcastSendResult> SendBroadcastToIdNumbersAsync(string providerName, IReadOnlyCollection<int> idNumbers, string content, string contentType = "text", CancellationToken ct = default);

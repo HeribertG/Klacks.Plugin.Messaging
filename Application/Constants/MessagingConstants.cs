@@ -22,6 +22,24 @@ public static class MessagingConstants
 
     public const string RolesClientEditors = RoleAdmin + "," + RoleSupervisor;
 
+    /// <summary>
+    /// Error a broadcast to a group answers with when the group has no recipient. A group the caller may not
+    /// see is answered with exactly this text, so it cannot be told apart from an empty or missing group.
+    /// </summary>
+    public const string BroadcastGroupEmptyError = "Group is empty";
+
+    /// <summary>
+    /// Error a broadcast to id numbers answers with when none resolves to a client; hidden clients count as
+    /// unresolved, so the answer never reveals that a hidden id number exists.
+    /// </summary>
+    public const string BroadcastNoClientsForIdNumbersError = "No clients found for the given id numbers";
+
+    /// <summary>
+    /// How many raw pages the message list reads at most to fill one page with messages the caller may see.
+    /// Bounds the cost for a caller whose visible messages are rare among all stored ones.
+    /// </summary>
+    public const int MaxVisibleMessagePageScans = 5;
+
     public const string ProviderWhatsApp = "WhatsApp";
     public const string ProviderTelegram = "Telegram";
     public const string ProviderSignal = "Signal";

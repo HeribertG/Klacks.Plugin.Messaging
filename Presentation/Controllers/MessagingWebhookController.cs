@@ -94,10 +94,6 @@ public class MessagingWebhookController : ControllerBase
                 MessageId = message.Id,
                 ProviderName = provider?.Name ?? providerName,
                 ProviderDisplayName = provider?.DisplayName ?? providerName,
-                Sender = message.Sender,
-                SenderDisplayName = message.SenderDisplayName,
-                Content = message.Content,
-                ContentType = message.ContentType,
                 Timestamp = message.Timestamp
             };
 

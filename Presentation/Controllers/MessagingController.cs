@@ -3,7 +3,16 @@
 /// <summary>
 /// REST API controller for managing messaging providers and messages.
 /// Provides CRUD operations for providers and message send/list functionality.
+/// Messages and broadcasts reach clients' chat ids, phone numbers and conversations, so every message route is
+/// limited to admins and supervisors, and a supervisor only sees, answers and broadcasts to clients of its visible
+/// groups; a hidden client is answered exactly like a missing one. Provider reads stay open to every signed-in
+/// user because they carry no configuration or secret and the client form asks them for every user.
 /// </summary>
+/// <param name="messagingService">Sends, lists and broadcasts messages</param>
+/// <param name="providerRepository">Persistence of the provider configuration</param>
+/// <param name="unitOfWork">Commits provider writes</param>
+/// <param name="rolloutTrigger">Starts the Telegram onboarding rollout when Telegram becomes enabled</param>
+/// <param name="accessScope">The host's group visibility applied to messages and broadcast audiences</param>
 using Klacks.Plugin.Contracts;
 using Klacks.Plugin.Contracts.Filters;
 using Klacks.Plugin.Messaging.Application.Constants;
@@ -29,18 +38,23 @@ public class MessagingController : ControllerBase
     private readonly IMessagingProviderRepository _providerRepository;
     private readonly IPluginUnitOfWork _unitOfWork;
     private readonly ITelegramRolloutTrigger _rolloutTrigger;
+    private readonly IMessagingAccessScope _accessScope;
 
     public MessagingController(
         IMessagingService messagingService,
         IMessagingProviderRepository providerRepository,
         IPluginUnitOfWork unitOfWork,
-        ITelegramRolloutTrigger rolloutTrigger)
+        ITelegramRolloutTrigger rolloutTrigger,
+        IMessagingAccessScope accessScope)
     {
         _messagingService = messagingService;
         _providerRepository = providerRepository;
         _unitOfWork = unitOfWork;
         _rolloutTrigger = rolloutTrigger;
+        _accessScope = accessScope;
     }
+
+    private bool IsAdmin => User.IsInRole(MessagingConstants.RoleAdmin);
 
     [HttpGet("providers")]
     public async Task<ActionResult<IReadOnlyList<MessagingProviderDto>>> GetProviders()
@@ -136,6 +150,7 @@ public class MessagingController : ControllerBase
     }
 
     [HttpGet("messages")]
+    [Authorize(Roles = MessagingConstants.RolesClientEditors)]
     public async Task<ActionResult<IReadOnlyList<MessageDto>>> GetMessages(
         [FromQuery] Guid? providerId = null,
         [FromQuery] MessageDirection? direction = null,
@@ -144,27 +159,39 @@ public class MessagingController : ControllerBase
         [FromQuery] int count = 50,
         [FromQuery] int offset = 0)
     {
-        var messages = await _messagingService.GetMessagesAsync(providerId, direction, sender, scope, count, offset);
+        var messages = IsAdmin
+            ? await _messagingService.GetMessagesAsync(providerId, direction, sender, scope, count, offset)
+            : await _accessScope.GetVisibleMessagesAsync(providerId, direction, sender, scope, count, offset);
         return Ok(messages.Select(m => ToMessageDto(m)).ToList());
     }
 
     [HttpGet("messages/{id:guid}")]
+    [Authorize(Roles = MessagingConstants.RolesClientEditors)]
     public async Task<ActionResult<MessageDto>> GetMessage(Guid id)
     {
         var message = await _messagingService.GetMessageAsync(id);
         if (message == null) return NotFound();
+        if (!IsAdmin && !await _accessScope.IsMessageVisibleAsync(message)) return NotFound();
         return Ok(ToMessageDto(message));
     }
 
     [HttpPost("messages/send")]
+    [Authorize(Roles = MessagingConstants.RolesClientEditors)]
     public async Task<ActionResult<SendMessageResult>> SendMessage([FromBody] SendMessageDto dto)
     {
+        if (!IsAdmin)
+        {
+            var recipientClientId = await _messagingService.ResolveRecipientClientIdAsync(dto.Provider, dto.Recipient);
+            if (!await _accessScope.IsClientVisibleAsync(recipientClientId)) return NotFound();
+        }
+
         var request = new SendMessageRequest(dto.Recipient, dto.Content, dto.ContentType, dto.MediaUrl);
         var result = await _messagingService.SendMessageAsync(dto.Provider, request);
         return Ok(result);
     }
 
     [HttpGet("broadcast/preview")]
+    [Authorize(Roles = MessagingConstants.RolesClientEditors)]
     public async Task<ActionResult<BroadcastPreview>> PreviewBroadcast([FromQuery] string provider, [FromQuery] Guid groupId)
     {
         if (string.IsNullOrWhiteSpace(provider))
@@ -175,7 +202,10 @@ public class MessagingController : ControllerBase
 
         try
         {
-            var preview = await _messagingService.PreviewBroadcastAsync(provider, groupId);
+            var preview = IsAdmin
+                ? await _messagingService.PreviewBroadcastAsync(provider, groupId)
+                : await _messagingService.PreviewBroadcastToClientsAsync(
+                    provider, await _accessScope.GetVisibleGroupClientIdsAsync(groupId));
             return Ok(preview);
         }
         catch (InvalidOperationException ex)
@@ -185,6 +215,7 @@ public class MessagingController : ControllerBase
     }
 
     [HttpPost("broadcast/send")]
+    [Authorize(Roles = MessagingConstants.RolesClientEditors)]
     public async Task<ActionResult<BroadcastSendResult>> SendBroadcast([FromBody] SendBroadcastDto dto)
     {
         if (string.IsNullOrWhiteSpace(dto.Provider))
@@ -198,7 +229,15 @@ public class MessagingController : ControllerBase
 
         try
         {
-            var result = await _messagingService.SendBroadcastAsync(dto.Provider, dto.GroupId, dto.Content, dto.ContentType ?? "text");
+            var contentType = dto.ContentType ?? MessagingConstants.DefaultContentType;
+            var result = IsAdmin
+                ? await _messagingService.SendBroadcastAsync(dto.Provider, dto.GroupId, dto.Content, contentType)
+                : await _messagingService.SendBroadcastToClientsAsync(
+                    dto.Provider,
+                    await _accessScope.GetVisibleGroupClientIdsAsync(dto.GroupId),
+                    dto.Content,
+                    contentType,
+                    MessagingConstants.BroadcastGroupEmptyError);
             return Ok(result);
         }
         catch (InvalidOperationException ex)
@@ -208,6 +247,7 @@ public class MessagingController : ControllerBase
     }
 
     [HttpGet("broadcast/preview-by-id-numbers")]
+    [Authorize(Roles = MessagingConstants.RolesClientEditors)]
     public async Task<ActionResult<BroadcastPreview>> PreviewBroadcastToIdNumbers(
         [FromQuery] string provider,
         [FromQuery] int[] idNumbers)
@@ -220,8 +260,16 @@ public class MessagingController : ControllerBase
 
         try
         {
-            var preview = await _messagingService.PreviewBroadcastToIdNumbersAsync(provider, idNumbers);
-            return Ok(preview);
+            if (IsAdmin)
+            {
+                return Ok(await _messagingService.PreviewBroadcastToIdNumbersAsync(provider, idNumbers));
+            }
+
+            var visibleClientIds = await _accessScope.GetVisibleIdNumberClientIdsAsync(idNumbers);
+            if (visibleClientIds.Count == 0)
+                return BadRequest(new { error = MessagingConstants.BroadcastNoClientsForIdNumbersError });
+
+            return Ok(await _messagingService.PreviewBroadcastToClientsAsync(provider, visibleClientIds));
         }
         catch (InvalidOperationException ex)
         {
@@ -230,6 +278,7 @@ public class MessagingController : ControllerBase
     }
 
     [HttpPost("broadcast/send-to-id-numbers")]
+    [Authorize(Roles = MessagingConstants.RolesClientEditors)]
     public async Task<ActionResult<BroadcastSendResult>> SendBroadcastToIdNumbers([FromBody] SendBroadcastToIdNumbersDto dto)
     {
         if (string.IsNullOrWhiteSpace(dto.Provider))
@@ -243,8 +292,15 @@ public class MessagingController : ControllerBase
 
         try
         {
-            var result = await _messagingService.SendBroadcastToIdNumbersAsync(
-                dto.Provider, dto.IdNumbers, dto.Content, dto.ContentType ?? "text");
+            var contentType = dto.ContentType ?? MessagingConstants.DefaultContentType;
+            var result = IsAdmin
+                ? await _messagingService.SendBroadcastToIdNumbersAsync(dto.Provider, dto.IdNumbers, dto.Content, contentType)
+                : await _messagingService.SendBroadcastToClientsAsync(
+                    dto.Provider,
+                    await _accessScope.GetVisibleIdNumberClientIdsAsync(dto.IdNumbers),
+                    dto.Content,
+                    contentType,
+                    MessagingConstants.BroadcastNoClientsForIdNumbersError);
             return Ok(result);
         }
         catch (InvalidOperationException ex)

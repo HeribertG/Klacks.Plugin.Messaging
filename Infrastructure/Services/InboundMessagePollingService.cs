@@ -105,10 +105,6 @@ public class InboundMessagePollingService : BackgroundService
                 MessageId = message.Id,
                 ProviderName = provider.Name,
                 ProviderDisplayName = provider.DisplayName,
-                Sender = message.Sender,
-                SenderDisplayName = message.SenderDisplayName,
-                Content = message.Content,
-                ContentType = message.ContentType,
                 Timestamp = message.Timestamp
             });
         }

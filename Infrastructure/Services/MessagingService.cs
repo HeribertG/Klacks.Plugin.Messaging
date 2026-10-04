@@ -152,6 +152,15 @@ public class MessagingService : IMessagingService
         return result;
     }
 
+    public async Task<Guid?> ResolveRecipientClientIdAsync(string providerName, string recipient, CancellationToken ct = default)
+    {
+        var provider = await ResolveProviderAsync(providerName);
+        if (provider == null)
+            return null;
+
+        return await ResolveOutboundClientIdAsync(provider, recipient, ct);
+    }
+
     private async Task<Guid?> ResolveOutboundClientIdAsync(MessagingProvider provider, string recipient, CancellationToken ct)
     {
         if (!Enum.TryParse<MessengerType>(provider.ProviderType, ignoreCase: true, out var messengerType))
@@ -507,9 +516,21 @@ public class MessagingService : IMessagingService
         var provider = await ResolveProviderAsync(providerName)
             ?? throw new InvalidOperationException($"Provider '{providerName}' not found");
 
-        var adapter = _adapterFactory.Create(provider.ProviderType);
         var clientIds = await _clientGroupReader.GetClientIdsInGroupAsync(groupId, ct);
+        return await BuildPreviewOrEmptyAsync(provider, clientIds, ct);
+    }
 
+    public async Task<BroadcastPreview> PreviewBroadcastToClientsAsync(string providerName, IReadOnlyCollection<Guid> clientIds, CancellationToken ct = default)
+    {
+        var provider = await ResolveProviderAsync(providerName)
+            ?? throw new InvalidOperationException($"Provider '{providerName}' not found");
+
+        return await BuildPreviewOrEmptyAsync(provider, clientIds.Distinct().ToList(), ct);
+    }
+
+    private async Task<BroadcastPreview> BuildPreviewOrEmptyAsync(MessagingProvider provider, IReadOnlyList<Guid> clientIds, CancellationToken ct)
+    {
+        var adapter = _adapterFactory.Create(provider.ProviderType);
         if (clientIds.Count == 0)
         {
             return new BroadcastPreview(0, 0, 0, 0, adapter.SupportsPhoneAsRecipient);
@@ -524,9 +545,20 @@ public class MessagingService : IMessagingService
         var clientIds = await _clientGroupReader.GetClientIdsInGroupAsync(groupId, ct);
 
         if (clientIds.Count == 0)
-            throw new InvalidOperationException("Group is empty");
+            throw new InvalidOperationException(MessagingConstants.BroadcastGroupEmptyError);
 
         return await ExecuteBroadcastAsync(providerName, provider, adapter, clientIds, content, contentType, ct);
+    }
+
+    public async Task<BroadcastSendResult> SendBroadcastToClientsAsync(string providerName, IReadOnlyCollection<Guid> clientIds, string content, string contentType, string emptyAudienceError, CancellationToken ct = default)
+    {
+        var (provider, adapter) = await ResolveEnabledProviderAsync(providerName, content);
+        var distinctIds = clientIds.Distinct().ToList();
+
+        if (distinctIds.Count == 0)
+            throw new InvalidOperationException(emptyAudienceError);
+
+        return await ExecuteBroadcastAsync(providerName, provider, adapter, distinctIds, content, contentType, ct);
     }
 
     public async Task<BroadcastPreview> PreviewBroadcastToIdNumbersAsync(string providerName, IReadOnlyCollection<int> idNumbers, CancellationToken ct = default)
@@ -538,7 +570,7 @@ public class MessagingService : IMessagingService
         var clientIds = await _clientIdNumberReader.GetClientIdsByIdNumbersAsync(idNumbers, ct);
 
         if (clientIds.Count == 0)
-            throw new InvalidOperationException("No clients found for the given id numbers");
+            throw new InvalidOperationException(MessagingConstants.BroadcastNoClientsForIdNumbersError);
 
         return await BuildPreviewAsync(provider, adapter, clientIds, ct);
     }
@@ -549,7 +581,7 @@ public class MessagingService : IMessagingService
         var clientIds = await _clientIdNumberReader.GetClientIdsByIdNumbersAsync(idNumbers, ct);
 
         if (clientIds.Count == 0)
-            throw new InvalidOperationException("No clients found for the given id numbers");
+            throw new InvalidOperationException(MessagingConstants.BroadcastNoClientsForIdNumbersError);
 
         return await ExecuteBroadcastAsync(providerName, provider, adapter, clientIds, content, contentType, ct);
     }

@@ -3,7 +3,8 @@
 /// <summary>
 /// REST controller for the owner messenger jsonb setting (APP_OWNER_MESSENGERS).
 /// Used by the Owner-Messenger card in Settings to read and write the owner's
-/// per-provider chat IDs.
+/// per-provider chat IDs. Reading is admin-only like the settings page that shows the card: the entries are the
+/// owner's private chat ids.
 /// </summary>
 using System.Text.Json;
 using Klacks.Plugin.Contracts;
@@ -39,6 +40,7 @@ public class OwnerMessengerController : ControllerBase
     }
 
     [HttpGet]
+    [Authorize(Roles = MessagingConstants.RoleAdmin)]
     public async Task<ActionResult<IReadOnlyList<OwnerMessengerEntry>>> Get(CancellationToken ct)
     {
         var entries = await _reader.GetAllAsync(ct);
