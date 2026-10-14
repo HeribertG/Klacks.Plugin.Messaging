@@ -2,8 +2,12 @@
 
 /// <summary>
 /// Repository implementation for MessengerContact CRUD and lookup operations.
-/// Uses DbContext.Set&lt;T&gt;() so it works with the host's DataBaseContext via PluginModelRegistry.
+/// Uses DbContext.Set&lt;T&gt;() so it works with the host's DataBaseContext via PluginModelRegistry. The client name search
+/// projects raw SQL onto ClientMessengerMatch, an unmapped type (SqlQueryRaw needs no model entry), and reads up to
+/// MessagingConstants.ClientNameSearchRowLimit rows because the caller's group visibility is applied afterwards.
 /// </summary>
+
+using Klacks.Plugin.Messaging.Application.Constants;
 using Klacks.Plugin.Messaging.Domain.Enums;
 using Klacks.Plugin.Messaging.Domain.Interfaces;
 using Klacks.Plugin.Messaging.Domain.Models;
@@ -49,7 +53,7 @@ public class MessengerContactRepository : IMessengerContactRepository
         if (keywords.Length == 0)
             return Array.Empty<ClientMessengerMatch>();
 
-        var sql = @"SELECT mc.client_id, mc.value, c.first_name, c.name, c.company
+        var sql = @"SELECT mc.client_id, mc.value, COALESCE(c.first_name, '') AS first_name, c.name, c.company
                     FROM messenger_contact mc
                     INNER JOIN client c ON c.id = mc.client_id
                     WHERE mc.is_deleted = false
@@ -57,17 +61,20 @@ public class MessengerContactRepository : IMessengerContactRepository
                       AND c.is_deleted = false
                       AND " + string.Join(" AND ", keywords.Select((_, i) => $"(LOWER(COALESCE(c.first_name, '')) LIKE @p_kw{i} OR LOWER(COALESCE(c.name, '')) LIKE @p_kw{i} OR LOWER(COALESCE(c.company, '')) LIKE @p_kw{i})")) + @"
                     ORDER BY mc.create_time
-                    LIMIT 5";
+                    LIMIT @p_limit";
 
-        var parameters = new List<Npgsql.NpgsqlParameter> { new Npgsql.NpgsqlParameter("p_type", (int)type) };
+        var parameters = new List<Npgsql.NpgsqlParameter>
+        {
+            new Npgsql.NpgsqlParameter("p_type", (int)type),
+            new Npgsql.NpgsqlParameter("p_limit", MessagingConstants.ClientNameSearchRowLimit)
+        };
         for (var i = 0; i < keywords.Length; i++)
         {
             parameters.Add(new Npgsql.NpgsqlParameter($"p_kw{i}", $"%{keywords[i]}%"));
         }
 
-        return await _context.Set<ClientMessengerMatch>()
-            .FromSqlRaw(sql, parameters.Cast<object>().ToArray())
-            .AsNoTracking()
+        return await _context.Database
+            .SqlQueryRaw<ClientMessengerMatch>(sql, parameters.Cast<object>().ToArray())
             .ToListAsync(ct);
     }
 

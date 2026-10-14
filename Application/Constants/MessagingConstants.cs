@@ -40,6 +40,52 @@ public static class MessagingConstants
     /// </summary>
     public const int MaxVisibleMessagePageScans = 5;
 
+    /// <summary>
+    /// Error the send skill answers a non-admin caller with when it asks for the owner or an application user, the
+    /// two recipients the messaging UI and REST routes offer to administrators only.
+    /// </summary>
+    public const string SendRequiresAdministratorError =
+        "Sending to the owner or to application users requires administrator rights";
+
+    /// <summary>
+    /// Error format the send skill answers with when the owner has no address for the requested provider.
+    /// Placeholder 0 is the provider name.
+    /// </summary>
+    public const string OwnerAddressMissingErrorFormat =
+        "No '{0}' identifier is configured for the owner. Open Settings -> Owner-Messenger and add a {0} entry.";
+
+    /// <summary>
+    /// Error format the send skill answers with when no contact of the requested messenger type matches the recipient. A
+    /// client the caller may not see is answered with exactly this text. Placeholder 0 is the messenger type, 1 the recipient.
+    /// </summary>
+    public const string ClientContactMissingErrorFormat =
+        "No {0} contact found for '{1}'. The client must have a {0} entry in their Messenger tab.";
+
+    /// <summary>
+    /// Error format for a provider name that maps to no messenger type. Placeholder 0 is the provider name.
+    /// </summary>
+    public const string UnknownProviderErrorFormat = "Unknown messaging provider '{0}'.";
+
+    /// <summary>
+    /// Rows the client name search reads at most. The search runs before the caller's group visibility is applied, so it
+    /// reads well beyond the candidates it shows: hidden clients must not push a visible one out of the result.
+    /// </summary>
+    public const int ClientNameSearchRowLimit = 50;
+
+    /// <summary>
+    /// Candidates an ambiguous client name lists at most, counted after the group visibility filter.
+    /// </summary>
+    public const int ClientNameCandidateLimit = 5;
+
+    public const string SkillSendMessage = "send_message";
+
+    /// <summary>
+    /// Kind of the facts a send_message confirmation is bound to (provider, recipient address, content type and a hash of the
+    /// text). The host stores it with the confirmation token and hands it back on the confirmed replay; the skill accepts only
+    /// this kind.
+    /// </summary>
+    public const string MessageBindingKind = "message";
+
     public const string ProviderWhatsApp = "WhatsApp";
     public const string ProviderTelegram = "Telegram";
     public const string ProviderSignal = "Signal";

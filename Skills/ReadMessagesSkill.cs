@@ -2,7 +2,8 @@
 
 /// <summary>
 /// Skill for reading recent messages from messaging providers.
-/// Used by the chatbot to display recent incoming or outgoing messages.
+/// Used by the chatbot to display recent incoming or outgoing messages. Administrators read the unfiltered store;
+/// every other caller reads only through IMessagingAccessScope, the same narrowing as the messages REST route.
 /// </summary>
 /// <param name="provider">Optional: filter by provider name</param>
 /// <param name="direction">Optional: filter by direction (inbound, outbound, all)</param>
@@ -10,6 +11,8 @@
 /// <param name="sender">Optional: filter by sender</param>
 
 using Klacks.Plugin.Contracts.Skills;
+using Klacks.Plugin.Messaging.Application.Constants;
+using Klacks.Plugin.Messaging.Application.Interfaces;
 using Klacks.Plugin.Messaging.Domain.Enums;
 using Klacks.Plugin.Messaging.Domain.Interfaces;
 
@@ -20,11 +23,14 @@ public class ReadMessagesSkill : BaseSkillImplementation
 {
     private readonly IMessageRepository _messageRepository;
     private readonly IMessagingProviderRepository _providerRepository;
+    private readonly IMessagingAccessScope _accessScope;
 
     public ReadMessagesSkill(
         IMessageRepository messageRepository,
-        IMessagingProviderRepository providerRepository)
+        IMessagingProviderRepository providerRepository,
+        IMessagingAccessScope accessScope)
     {
+        _accessScope = accessScope;
         _messageRepository = messageRepository;
         _providerRepository = providerRepository;
     }
@@ -57,7 +63,9 @@ public class ReadMessagesSkill : BaseSkillImplementation
             _ => null
         };
 
-        var messages = await _messageRepository.GetMessagesAsync(providerId, direction, sender, scope: null, count, 0);
+        var messages = context.UserPermissions.Contains(MessagingConstants.RoleAdmin)
+            ? await _messageRepository.GetMessagesAsync(providerId, direction, sender, scope: null, count, 0)
+            : await _accessScope.GetVisibleMessagesAsync(providerId, direction, sender, scope: null, count, 0, cancellationToken);
 
         var result = messages.Select(m => new
         {

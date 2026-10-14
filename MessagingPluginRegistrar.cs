@@ -47,6 +47,7 @@ public class MessagingPluginRegistrar : IPluginRegistrar
         services.AddSingleton<IMessagingInboundActivityTracker>(_ => new MessagingInboundActivityTracker());
         services.AddScoped<IMessagingService, MessagingService>();
         services.AddScoped<IMessagingAccessScope, MessagingAccessScope>();
+        services.AddScoped<IMessageRecipientResolver, MessageRecipientResolver>();
         services.AddScoped<MessagingProviderAdapterFactory>();
         services.AddScoped<IMessagingProviderAdapterFactory>(sp => sp.GetRequiredService<MessagingProviderAdapterFactory>());
         services.AddScoped<IMessagingSetupDiagnosticsService, MessagingSetupDiagnosticsService>();
