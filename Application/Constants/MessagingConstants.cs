@@ -86,6 +86,45 @@ public static class MessagingConstants
     /// </summary>
     public const string MessageBindingKind = "message";
 
+    public const string SkillSendBroadcast = "send_broadcast";
+
+    public const string SkillEvaluateMessagingReach = "evaluate_messaging_reach";
+
+    /// <summary>
+    /// Kind of the facts a send_broadcast confirmation is bound to (provider, recipient count, a digest of the recipients, content
+    /// type and a hash of the text). The skill accepts only this kind.
+    /// </summary>
+    public const string BroadcastBindingKind = "broadcast";
+
+    /// <summary>
+    /// Error format of a broadcast whose audience holds nobody with an address on the provider. Placeholder 0 is the provider name.
+    /// </summary>
+    public const string BroadcastNoRecipientsErrorFormat = "No recipients with messenger contact or phone fallback for provider '{0}'";
+
+    /// <summary>
+    /// Minutes during which a client who received a broadcast text is left out of the same text on the same provider. It outlasts
+    /// the host's confirmation token, so a second pending confirmation of the same broadcast still finds the first run.
+    /// </summary>
+    public const int BroadcastRepeatWindowMinutes = 15;
+
+    /// <summary>
+    /// Error of a broadcast repeated within the repeat window when every recipient already has the text.
+    /// </summary>
+    public const string BroadcastAlreadyDeliveredError =
+        "Every recipient already received exactly this text a few minutes ago. Nothing was sent.";
+
+    /// <summary>
+    /// Error of a broadcast that finds another run in progress. It never waits for that run, because the text it would send could
+    /// have been delivered in the meantime.
+    /// </summary>
+    public const string BroadcastAlreadyRunningError =
+        "Another broadcast is still running, so nothing was sent and this confirmation is used up. Ask for a new preview when it has finished.";
+
+    /// <summary>
+    /// Names of people no enabled channel reaches that the reach advice lists at most; the count is not capped.
+    /// </summary>
+    public const int MaxReachMissingNames = 20;
+
     public const string ProviderWhatsApp = "WhatsApp";
     public const string ProviderTelegram = "Telegram";
     public const string ProviderSignal = "Signal";

@@ -76,6 +76,23 @@ public class MessageRepository : IMessageRepository
                 ct);
     }
 
+    public async Task<IReadOnlySet<Guid>> GetRecentBroadcastClientIdsAsync(Guid providerId, string content, DateTime sinceUtc, CancellationToken ct = default)
+    {
+        var clientIds = await _context.Set<Message>()
+            .Where(m => m.ProviderId == providerId
+                && m.BroadcastId != null
+                && m.ClientId != null
+                && m.Direction == MessageDirection.Outbound
+                && m.Status != MessageStatus.Failed
+                && m.Timestamp >= sinceUtc
+                && m.Content == content)
+            .Select(m => m.ClientId!.Value)
+            .Distinct()
+            .ToListAsync(ct);
+
+        return clientIds.ToHashSet();
+    }
+
     public async Task AddAsync(Message message)
     {
         await _context.Set<Message>().AddAsync(message);

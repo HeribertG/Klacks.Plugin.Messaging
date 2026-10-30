@@ -32,7 +32,5 @@ public static class SendMessageBinding
 
     public static bool Matches(PluginConfirmedBinding confirmed, IReadOnlyList<string> current) =>
         string.Equals(confirmed.Kind, MessagingConstants.MessageBindingKind, StringComparison.Ordinal)
-        && confirmed.Items.Count > 0
-        && confirmed.Items.OrderBy(item => item, StringComparer.Ordinal)
-            .SequenceEqual(current.OrderBy(item => item, StringComparer.Ordinal), StringComparer.Ordinal);
+        && ConfirmedBindingItems.AreEqual(confirmed.Items, current);
 }

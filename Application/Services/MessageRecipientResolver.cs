@@ -104,7 +104,7 @@ public class MessageRecipientResolver : IMessageRecipientResolver
         var provider = parameters.Provider;
         if (string.IsNullOrWhiteSpace(provider))
         {
-            var sole = await ResolveSoleEnabledProviderAsync();
+            var sole = await SoleMessagingProvider.ResolveAsync(_providerRepository);
             if (sole.Error != null)
             {
                 return MessageRecipientResolution.Failed(sole.Error);
@@ -128,30 +128,6 @@ public class MessageRecipientResolver : IMessageRecipientResolver
         }
 
         return MessageRecipientResolution.Resolved(provider, lookup.Recipient.DisplayName, lookup.Recipient.Identifier);
-    }
-
-    /// <summary>
-    /// Auto-resolves the provider when the caller omitted it: with exactly one enabled provider there
-    /// is nothing to ask about, so the skill must not force a channel choice the installation cannot
-    /// even offer. Returns the provider's type (e.g. "Slack"), not its admin-assigned Name, matching
-    /// what ProviderToMessengerType and the downstream provider lookup both expect.
-    /// </summary>
-    private async Task<(string? ProviderType, string? Error)> ResolveSoleEnabledProviderAsync()
-    {
-        var enabledProviders = await _providerRepository.GetEnabledAsync();
-
-        if (enabledProviders.Count == 0)
-        {
-            return (null, "No messaging provider is configured and enabled. An admin must set one up under Settings -> Messaging.");
-        }
-
-        if (enabledProviders.Count > 1)
-        {
-            var names = string.Join(", ", enabledProviders.Select(p => p.Name));
-            return (null, $"The 'provider' parameter is required: multiple messaging providers are enabled ({names}). Specify which one to use.");
-        }
-
-        return (enabledProviders[0].ProviderType, null);
     }
 
     private static MessageRecipientResolution BuildNoRecipientError(string recipient, string provider)
@@ -329,7 +305,7 @@ public class MessageRecipientResolver : IMessageRecipientResolver
             "An admin can send an invite from the user administration to pair a channel.");
     }
 
-    private static string BuildClientDisplayName(ClientMessengerMatch match)
+    internal static string BuildClientDisplayName(ClientMessengerMatch match)
     {
         var combined = $"{match.Name}, {match.FirstName}".Trim().Trim(',', ' ');
         if (combined.Length > 0)

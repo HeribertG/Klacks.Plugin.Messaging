@@ -16,6 +16,22 @@ public interface IMessengerContactRepository
 
     Task<MessengerContact?> GetByClientAndTypeAsync(Guid clientId, MessengerType type, CancellationToken ct = default);
 
+    /// <summary>
+    /// The oldest non-deleted contact of the given type per client, in one query.
+    /// </summary>
+    /// <param name="clientIds">Clients to read</param>
+    /// <param name="type">Messenger type</param>
+    /// <param name="ct">Cancellation token</param>
+    Task<IReadOnlyDictionary<Guid, MessengerContact>> GetFirstContactsAsync(IReadOnlyCollection<Guid> clientIds, MessengerType type, CancellationToken ct = default);
+
+    /// <summary>
+    /// Display names of non-deleted clients, ordered by name and capped. Reads the name columns only.
+    /// </summary>
+    /// <param name="clientIds">Clients to read</param>
+    /// <param name="limit">Names to return at most</param>
+    /// <param name="ct">Cancellation token</param>
+    Task<IReadOnlyList<string>> GetClientDisplayNamesAsync(IReadOnlyCollection<Guid> clientIds, int limit, CancellationToken ct = default);
+
     Task<IReadOnlyList<ClientMessengerMatch>> SearchByClientNameAsync(string nameQuery, MessengerType type, CancellationToken ct = default);
 
     Task<MessengerContact?> GetByTypeAndValueAsync(MessengerType type, string value, CancellationToken ct = default);

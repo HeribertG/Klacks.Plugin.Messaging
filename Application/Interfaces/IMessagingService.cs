@@ -77,5 +77,17 @@ public interface IMessagingService
 
     Task<BroadcastSendResult> SendBroadcastToIdNumbersAsync(string providerName, IReadOnlyCollection<int> idNumbers, string content, string contentType = "text", CancellationToken ct = default);
 
+    /// <summary>
+    /// Resolves the addresses a broadcast to these clients would use on an enabled provider, with the rule of the send path, and
+    /// sends nothing. Throws InvalidOperationException for a provider that is missing or disabled.
+    /// </summary>
+    Task<BroadcastRecipientSet> ResolveBroadcastRecipientsAsync(string providerName, IReadOnlyCollection<Guid> clientIds, CancellationToken ct = default);
+
+    /// <summary>
+    /// Sends a broadcast to exactly these resolved addresses, through the same delivery as every other broadcast. For a caller
+    /// that compared them with what a user confirmed: resolving again here would send what nobody compared.
+    /// </summary>
+    Task<BroadcastSendResult> SendBroadcastToRecipientsAsync(BroadcastRecipientSet recipients, string content, string contentType, CancellationToken ct = default);
+
     Task<bool> RegisterWebhookAsync(Guid providerId, CancellationToken ct = default);
 }

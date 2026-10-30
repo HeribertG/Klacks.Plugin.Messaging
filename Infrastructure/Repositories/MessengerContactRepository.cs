@@ -8,6 +8,7 @@
 /// </summary>
 
 using Klacks.Plugin.Messaging.Application.Constants;
+using Klacks.Plugin.Messaging.Application.Services;
 using Klacks.Plugin.Messaging.Domain.Enums;
 using Klacks.Plugin.Messaging.Domain.Interfaces;
 using Klacks.Plugin.Messaging.Domain.Models;
@@ -45,6 +46,37 @@ public class MessengerContactRepository : IMessengerContactRepository
             .Where(c => c.ClientId == clientId && c.Type == type && !c.IsDeleted)
             .OrderBy(c => c.CreateTime)
             .FirstOrDefaultAsync(ct);
+    }
+
+    public async Task<IReadOnlyDictionary<Guid, MessengerContact>> GetFirstContactsAsync(
+        IReadOnlyCollection<Guid> clientIds, MessengerType type, CancellationToken ct = default)
+    {
+        var contacts = await _context.Set<MessengerContact>()
+            .Where(c => clientIds.Contains(c.ClientId) && c.Type == type && !c.IsDeleted)
+            .OrderBy(c => c.CreateTime)
+            .AsNoTracking()
+            .ToListAsync(ct);
+
+        return contacts.GroupBy(c => c.ClientId).ToDictionary(group => group.Key, group => group.First());
+    }
+
+    public async Task<IReadOnlyList<string>> GetClientDisplayNamesAsync(
+        IReadOnlyCollection<Guid> clientIds, int limit, CancellationToken ct = default)
+    {
+        const string sql = @"SELECT c.id AS client_id, '' AS value, COALESCE(c.first_name, '') AS first_name, COALESCE(c.name, '') AS name, c.company
+                             FROM client c
+                             WHERE c.is_deleted = false AND c.id = ANY(@p_ids)
+                             ORDER BY c.name, c.first_name, c.id
+                             LIMIT @p_limit";
+
+        var matches = await _context.Database
+            .SqlQueryRaw<ClientMessengerMatch>(
+                sql,
+                new Npgsql.NpgsqlParameter("p_ids", clientIds.ToArray()),
+                new Npgsql.NpgsqlParameter("p_limit", limit))
+            .ToListAsync(ct);
+
+        return matches.Select(MessageRecipientResolver.BuildClientDisplayName).ToList();
     }
 
     public async Task<IReadOnlyList<ClientMessengerMatch>> SearchByClientNameAsync(string nameQuery, MessengerType type, CancellationToken ct = default)

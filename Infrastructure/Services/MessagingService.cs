@@ -17,6 +17,7 @@
 /// <param name="_clientMessengerObservers">Anyone in the host who wants to hear that a known client sent a message; empty is a valid state</param>
 /// <param name="_logSuppressionCache">Keeps a discarded sender from being logged on every message</param>
 /// <param name="_activityTracker">Records webhook hits, signature rejections and unknown senders for the setup diagnosis</param>
+/// <param name="_broadcastRunLock">Keeps a second broadcast from running next to one in progress</param>
 /// <param name="_logger">Logger instance</param>
 using System.Globalization;
 using Klacks.Plugin.Contracts;
@@ -45,11 +46,12 @@ public class MessagingService : IMessagingService
     private readonly IMemoryCache _logSuppressionCache;
     private readonly IClientGroupReader _clientGroupReader;
     private readonly IClientIdNumberReader _clientIdNumberReader;
-    private readonly IClientPhoneReader _clientPhoneReader;
+    private readonly IBroadcastRecipientResolver _broadcastRecipientResolver;
     private readonly IPluginUnitOfWork _unitOfWork;
     private readonly IPluginSettingsReader _settingsReader;
     private readonly MessagingProviderAdapterFactory _adapterFactory;
     private readonly IMessagingInboundActivityTracker _activityTracker;
+    private readonly IBroadcastRunLock _broadcastRunLock;
     private readonly ILogger<MessagingService> _logger;
 
     public MessagingService(
@@ -64,11 +66,12 @@ public class MessagingService : IMessagingService
         IMemoryCache logSuppressionCache,
         IClientGroupReader clientGroupReader,
         IClientIdNumberReader clientIdNumberReader,
-        IClientPhoneReader clientPhoneReader,
+        IBroadcastRecipientResolver broadcastRecipientResolver,
         IPluginUnitOfWork unitOfWork,
         IPluginSettingsReader settingsReader,
         MessagingProviderAdapterFactory adapterFactory,
         IMessagingInboundActivityTracker activityTracker,
+        IBroadcastRunLock broadcastRunLock,
         ILogger<MessagingService> logger)
     {
         _providerRepository = providerRepository;
@@ -82,11 +85,12 @@ public class MessagingService : IMessagingService
         _logSuppressionCache = logSuppressionCache;
         _clientGroupReader = clientGroupReader;
         _clientIdNumberReader = clientIdNumberReader;
-        _clientPhoneReader = clientPhoneReader;
+        _broadcastRecipientResolver = broadcastRecipientResolver;
         _unitOfWork = unitOfWork;
         _settingsReader = settingsReader;
         _adapterFactory = adapterFactory;
         _activityTracker = activityTracker;
+        _broadcastRunLock = broadcastRunLock;
         _logger = logger;
     }
 
@@ -586,6 +590,20 @@ public class MessagingService : IMessagingService
         return await ExecuteBroadcastAsync(providerName, provider, adapter, clientIds, content, contentType, ct);
     }
 
+    public async Task<BroadcastRecipientSet> ResolveBroadcastRecipientsAsync(string providerName, IReadOnlyCollection<Guid> clientIds, CancellationToken ct = default)
+    {
+        var (provider, adapter) = await RequireEnabledProviderAsync(providerName);
+        var (recipients, skipped) = await _broadcastRecipientResolver.ResolveAsync(provider.ProviderType, adapter.SupportsPhoneAsRecipient, clientIds, ct);
+        return new BroadcastRecipientSet(provider.Id, provider.Name, recipients, skipped);
+    }
+
+    public async Task<BroadcastSendResult> SendBroadcastToRecipientsAsync(BroadcastRecipientSet recipients, string content, string contentType, CancellationToken ct = default)
+    {
+        var (provider, adapter) = await ResolveEnabledProviderAsync(recipients.ProviderName, content);
+        return await DeliverBroadcastAsync(
+            recipients.ProviderName, provider, adapter, recipients.Recipients.Count + recipients.Skipped, recipients.Recipients, recipients.Skipped, content, contentType, ct);
+    }
+
     public async Task<bool> RegisterWebhookAsync(Guid providerId, CancellationToken ct = default)
     {
         var provider = await _providerRepository.GetByIdAsync(providerId);
@@ -615,6 +633,11 @@ public class MessagingService : IMessagingService
         if (string.IsNullOrWhiteSpace(content))
             throw new ArgumentException("Broadcast content must not be empty", nameof(content));
 
+        return await RequireEnabledProviderAsync(providerName);
+    }
+
+    private async Task<(MessagingProvider Provider, IMessagingProviderAdapter Adapter)> RequireEnabledProviderAsync(string providerName)
+    {
         var provider = await ResolveProviderAsync(providerName)
             ?? throw new InvalidOperationException($"Provider '{providerName}' not found");
 
@@ -630,51 +653,12 @@ public class MessagingService : IMessagingService
         IReadOnlyCollection<Guid> clientIds,
         CancellationToken ct)
     {
-        var (recipients, skipped) = await ResolveRecipientsAsync(provider, adapter, clientIds, ct);
+        var (recipients, skipped) = await _broadcastRecipientResolver.ResolveAsync(provider.ProviderType, adapter.SupportsPhoneAsRecipient, clientIds, ct);
 
         var contactCount = recipients.Count(r => !r.FromPhoneFallback);
         var phoneCount = recipients.Count(r => r.FromPhoneFallback);
 
         return new BroadcastPreview(clientIds.Count, contactCount, phoneCount, skipped, adapter.SupportsPhoneAsRecipient);
-    }
-
-    private async Task<(IReadOnlyList<BroadcastRecipient> Recipients, int Skipped)> ResolveRecipientsAsync(
-        MessagingProvider provider,
-        IMessagingProviderAdapter adapter,
-        IReadOnlyCollection<Guid> clientIds,
-        CancellationToken ct)
-    {
-        if (!Enum.TryParse<MessengerType>(provider.ProviderType, ignoreCase: true, out var messengerType))
-            throw new InvalidOperationException($"Cannot map provider type '{provider.ProviderType}' to MessengerType");
-
-        IReadOnlyDictionary<Guid, string?> phoneFallbacks = adapter.SupportsPhoneAsRecipient
-            ? await _clientPhoneReader.GetMobilePhonesAsync(clientIds, ct)
-            : new Dictionary<Guid, string?>();
-
-        var recipients = new List<BroadcastRecipient>();
-        var skipped = 0;
-
-        foreach (var clientId in clientIds)
-        {
-            var contact = await _messengerContactRepository.GetByClientAndTypeAsync(clientId, messengerType, ct);
-            if (contact != null && !string.IsNullOrWhiteSpace(contact.Value))
-            {
-                recipients.Add(new BroadcastRecipient(clientId, contact.Value, contact.Description, FromPhoneFallback: false));
-                continue;
-            }
-
-            if (adapter.SupportsPhoneAsRecipient
-                && phoneFallbacks.TryGetValue(clientId, out var phone)
-                && !string.IsNullOrWhiteSpace(phone))
-            {
-                recipients.Add(new BroadcastRecipient(clientId, phone!, null, FromPhoneFallback: true));
-                continue;
-            }
-
-            skipped++;
-        }
-
-        return (recipients, skipped);
     }
 
     private async Task<BroadcastSendResult> ExecuteBroadcastAsync(
@@ -686,10 +670,34 @@ public class MessagingService : IMessagingService
         string contentType,
         CancellationToken ct)
     {
-        var (recipients, skipped) = await ResolveRecipientsAsync(provider, adapter, clientIds, ct);
+        var (recipients, skipped) = await _broadcastRecipientResolver.ResolveAsync(provider.ProviderType, adapter.SupportsPhoneAsRecipient, clientIds, ct);
 
         if (recipients.Count == 0)
-            throw new InvalidOperationException($"No recipients with messenger contact or phone fallback for provider '{providerName}'");
+            throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, MessagingConstants.BroadcastNoRecipientsErrorFormat, providerName));
+
+        return await DeliverBroadcastAsync(providerName, provider, adapter, clientIds.Count, recipients, skipped, content, contentType, ct);
+    }
+
+    /// <summary>
+    /// Sends one recipient after the other under the run lock. Each recipient is claimed with a committed Pending row before the
+    /// send and the outcome is committed right after it, so a crash mid-run leaves a record of everyone already reached and the
+    /// repeat check spares them. A crash between claim and send loses that one recipient for the repeat window: it stays Pending
+    /// and counts as delivered, which is the chosen side, a missed message over a doubled one. A failed send stays isolated to its
+    /// recipient. A failed commit stops the run, because a send without a durable claim could be repeated later.
+    /// </summary>
+    private async Task<BroadcastSendResult> DeliverBroadcastAsync(
+        string providerName,
+        MessagingProvider provider,
+        IMessagingProviderAdapter adapter,
+        int audienceCount,
+        IReadOnlyList<BroadcastRecipient> recipients,
+        int skipped,
+        string content,
+        string contentType,
+        CancellationToken ct)
+    {
+        await using var runHold = await _broadcastRunLock.TryAcquireAsync(ct)
+            ?? throw new InvalidOperationException(MessagingConstants.BroadcastAlreadyRunningError);
 
         var pacingDelay = await ResolvePacingDelayAsync();
         var deadline = DateTime.UtcNow.AddSeconds(MessagingRateLimitConstants.MaxBroadcastDurationSeconds);
@@ -705,22 +713,23 @@ public class MessagingService : IMessagingService
 
             if (DateTime.UtcNow >= deadline || ct.IsCancellationRequested)
             {
-                await _messageRepository.AddAsync(BuildBroadcastMessage(
-                    provider,
-                    recipient,
-                    new SendMessageResult(false, ErrorMessage: MessagingRateLimitConstants.BroadcastBudgetExceededError),
-                    content,
-                    contentType,
-                    broadcastId));
+                var unattempted = BuildBroadcastClaim(provider, recipient, content, contentType, broadcastId);
+                ApplyBroadcastOutcome(unattempted, new SendMessageResult(false, ErrorMessage: MessagingRateLimitConstants.BroadcastBudgetExceededError));
+                await _messageRepository.AddAsync(unattempted);
 
                 failed++;
                 abandoned++;
                 continue;
             }
 
+            var claim = BuildBroadcastClaim(provider, recipient, content, contentType, broadcastId);
+            await _messageRepository.AddAsync(claim);
+            await _unitOfWork.CompleteAsync();
+
             var result = await TrySendAsync(provider, adapter, recipient, content, contentType, broadcastId, ct);
 
-            await _messageRepository.AddAsync(BuildBroadcastMessage(provider, recipient, result, content, contentType, broadcastId));
+            ApplyBroadcastOutcome(claim, result);
+            await _unitOfWork.CompleteAsync();
 
             if (result.Success)
                 sent++;
@@ -745,9 +754,9 @@ public class MessagingService : IMessagingService
 
         _logger.LogInformation(
             "Broadcast {BroadcastId} via {Provider}: total={Total} sent={Sent} failed={Failed} skipped={Skipped} throttled={Throttled}",
-            broadcastId, providerName, clientIds.Count, sent, failed, skipped, throttled);
+            broadcastId, providerName, audienceCount, sent, failed, skipped, throttled);
 
-        return new BroadcastSendResult(broadcastId, clientIds.Count, sent, failed, skipped);
+        return new BroadcastSendResult(broadcastId, audienceCount, sent, failed, skipped);
     }
 
     private async Task<SendMessageResult> TrySendAsync(
@@ -770,10 +779,9 @@ public class MessagingService : IMessagingService
         }
     }
 
-    private Message BuildBroadcastMessage(
+    private static Message BuildBroadcastClaim(
         MessagingProvider provider,
         BroadcastRecipient recipient,
-        SendMessageResult result,
         string content,
         string contentType,
         Guid broadcastId)
@@ -784,16 +792,23 @@ public class MessagingService : IMessagingService
             ProviderId = provider.Id,
             ClientId = recipient.ClientId,
             BroadcastId = broadcastId,
-            ExternalMessageId = result.ExternalMessageId ?? string.Empty,
+            ExternalMessageId = string.Empty,
             Recipient = recipient.Recipient,
             RecipientDisplayName = recipient.DisplayName ?? string.Empty,
             Content = content,
             ContentType = contentType,
             Direction = MessageDirection.Outbound,
-            Status = result.Success ? MessageStatus.Sent : MessageStatus.Failed,
-            ErrorMessage = result.ErrorMessage,
+            Status = MessageStatus.Pending,
             Timestamp = DateTime.UtcNow,
         };
+    }
+
+    private static void ApplyBroadcastOutcome(Message claim, SendMessageResult result)
+    {
+        claim.ExternalMessageId = result.ExternalMessageId ?? string.Empty;
+        claim.Status = result.Success ? MessageStatus.Sent : MessageStatus.Failed;
+        claim.ErrorMessage = result.ErrorMessage;
+        claim.Timestamp = DateTime.UtcNow;
     }
 
     /// <summary>

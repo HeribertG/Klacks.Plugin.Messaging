@@ -48,6 +48,11 @@ public class MessagingPluginRegistrar : IPluginRegistrar
         services.AddScoped<IMessagingService, MessagingService>();
         services.AddScoped<IMessagingAccessScope, MessagingAccessScope>();
         services.AddScoped<IMessageRecipientResolver, MessageRecipientResolver>();
+        services.AddScoped<IBroadcastRecipientResolver, BroadcastRecipientResolver>();
+        services.AddScoped<IBroadcastAudienceResolver, BroadcastAudienceResolver>();
+        services.AddScoped<IBroadcastPlanner, BroadcastPlanner>();
+        services.AddScoped<IBroadcastRunLock, BroadcastRunLock>();
+        services.AddScoped<IMessagingReachService, MessagingReachService>();
         services.AddScoped<MessagingProviderAdapterFactory>();
         services.AddScoped<IMessagingProviderAdapterFactory>(sp => sp.GetRequiredService<MessagingProviderAdapterFactory>());
         services.AddScoped<IMessagingSetupDiagnosticsService, MessagingSetupDiagnosticsService>();
@@ -80,6 +85,8 @@ public class MessagingPluginRegistrar : IPluginRegistrar
         services.AddScoped<ReadMessagesSkill>();
         services.AddScoped<ListMessagingProvidersSkill>();
         services.AddScoped<DiagnoseMessagingSetupSkill>();
+        services.AddScoped<SendBroadcastSkill>();
+        services.AddScoped<EvaluateMessagingReachSkill>();
 
         services.AddScoped<IPluginOperationalCheck, MessagingOperationalCheck>();
 
